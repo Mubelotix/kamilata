@@ -20,45 +20,98 @@
 //! The two nodes establish a connection, negotiate the ping protocol
 //! and begin pinging each other.
 
+use futures::future::join;
 use futures::prelude::*;
+use libp2p::identity::Keypair;
 use libp2p::swarm::{Swarm, SwarmEvent};
 use libp2p::{identity, ping, Multiaddr, PeerId};
+use libp2p::{core::transport::MemoryTransport, Transport};
 use std::error::Error;
+
+pub async fn memory_transport(
+    keypair: identity::Keypair,
+) -> std::io::Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
+    let transport = MemoryTransport::default();
+
+    let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
+        .into_authentic(&keypair)
+        .expect("Signing libp2p-noise static DH keypair failed.");
+
+    Ok(transport
+        .upgrade(libp2p::core::upgrade::Version::V1)
+        .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
+        .multiplex(libp2p::core::upgrade::SelectUpgrade::new(
+            libp2p::yamux::YamuxConfig::default(),
+            libp2p::mplex::MplexConfig::default(),
+        ))
+        .timeout(std::time::Duration::from_secs(20))
+        .boxed())
+}
+
+pub struct Client {
+    local_key: Keypair,
+    local_peer_id: PeerId,
+    swarm: Swarm<ping::Behaviour>,
+    addr: Multiaddr,
+}
+
+impl Client {
+    pub async fn init(n: usize) -> Self {
+        let local_key = identity::Keypair::generate_ed25519();
+        let local_peer_id = PeerId::from(local_key.public());
+        println!("Local peer id: {:?}", local_peer_id);
+    
+        let transport = memory_transport(local_key.clone()).await.expect("Failed to build transport");
+
+        // Create a ping network behaviour.
+        //
+        // For illustrative purposes, the ping protocol is configured to
+        // keep the connection alive, so a continuous sequence of pings
+        // can be observed.
+        let behaviour = ping::Behaviour::new(ping::Config::new().with_keep_alive(true));
+    
+        let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+    
+        // Tell the swarm to listen on all interfaces and a random, OS-assigned
+        // port.
+        let addr: Multiaddr = format!("/memory/{n}").parse().unwrap();
+        swarm.listen_on(addr.clone()).unwrap();
+    
+        Client {
+            local_key,
+            local_peer_id,
+            swarm,
+            addr,
+        }
+    }
+
+    fn dial(&mut self, addr: Multiaddr) {
+        println!("Dialing {:?}", addr);
+        self.swarm.dial(addr).unwrap();
+    }
+
+    async fn run(mut self) {
+        loop {
+            match self.swarm.select_next_some().await {
+                SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {:?}", address),
+                SwarmEvent::Behaviour(event) => println!("{:?}", event),
+                _ => {}
+            }
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let local_key = identity::Keypair::generate_ed25519();
-    let local_peer_id = PeerId::from(local_key.public());
-    println!("Local peer id: {:?}", local_peer_id);
+    let client1 = Client::init(1000).await;
+    let addr = client1.addr.clone();
+    let h1 = tokio::spawn(client1.run());
 
-    let transport = libp2p::development_transport(local_key).await?;
+    let mut client2 = Client::init(1001).await;
+    client2.dial(addr);
+    let h2 = tokio::spawn(client2.run());
 
-    // Create a ping network behaviour.
-    //
-    // For illustrative purposes, the ping protocol is configured to
-    // keep the connection alive, so a continuous sequence of pings
-    // can be observed.
-    let behaviour = ping::Behaviour::new(ping::Config::new().with_keep_alive(true));
+    join(h1, h2).await.0.unwrap();
 
-    let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
-
-    // Tell the swarm to listen on all interfaces and a random, OS-assigned
-    // port.
-    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
-
-    // Dial the peer identified by the multi-address given as the second
-    // command-line argument, if any.
-    if let Some(addr) = std::env::args().nth(1) {
-        let remote: Multiaddr = addr.parse()?;
-        swarm.dial(remote)?;
-        println!("Dialed {}", addr)
-    }
-
-    loop {
-        match swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {:?}", address),
-            SwarmEvent::Behaviour(event) => println!("{:?}", event),
-            _ => {}
-        }
-    }
+    Ok(())
 }
