@@ -20,13 +20,10 @@
 //! The two nodes establish a connection, negotiate the ping protocol
 //! and begin pinging each other.
 
-use futures::future::join;
-use futures::prelude::*;
-use libp2p::identity::Keypair;
-use libp2p::swarm::{Swarm, SwarmEvent};
-use libp2p::{identity, ping, Multiaddr, PeerId};
-use libp2p::{core::transport::MemoryTransport, Transport};
-use std::error::Error;
+mod old_kamilata;
+use old_kamilata::*;
+mod prelude;
+use prelude::*;
 
 pub async fn memory_transport(
     keypair: identity::Keypair,
