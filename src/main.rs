@@ -20,8 +20,8 @@
 //! The two nodes establish a connection, negotiate the ping protocol
 //! and begin pinging each other.
 
-mod old_kamilata;
-use old_kamilata::*;
+mod kamilata;
+use kamilata::*;
 mod prelude;
 use prelude::*;
 
