@@ -1,6 +1,6 @@
 use std::{iter, pin::Pin};
 use futures::{Future, prelude::*};
-use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade, PeerId};
+use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol, NetworkBehaviour}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade, PeerId};
 
 #[derive(Debug, Clone, Default)]
 pub struct KamilataProtocolConfig {}
@@ -161,6 +161,40 @@ impl IntoConnectionHandler for KamilataHandlerProto {
     }
 
     fn inbound_protocol(&self) -> <Self::Handler as ConnectionHandler>::InboundProtocol {
+        todo!()
+    }
+}
+
+enum KamilataEvent {
+
+}
+
+struct Kamilata {
+
+}
+
+impl NetworkBehaviour for Kamilata {
+    type ConnectionHandler = KamilataHandlerProto;
+    type OutEvent = KamilataEvent;
+
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
+        todo!()
+    }
+
+    fn inject_event(
+        &mut self,
+        peer_id: PeerId,
+        connection: libp2p::core::connection::ConnectionId,
+        event: <<Self::ConnectionHandler as libp2p::swarm::IntoConnectionHandler>::Handler as libp2p::swarm::ConnectionHandler>::OutEvent,
+    ) {
+        todo!()
+    }
+
+    fn poll(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+        params: &mut impl libp2p::swarm::PollParameters,
+    ) -> std::task::Poll<libp2p::swarm::NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         todo!()
     }
 }
