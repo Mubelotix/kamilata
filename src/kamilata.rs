@@ -1,6 +1,6 @@
 use std::{iter, pin::Pin};
 use futures::{Future, prelude::*};
-use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade};
+use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade, PeerId};
 
 #[derive(Debug, Clone, Default)]
 pub struct KamilataProtocolConfig {}
@@ -145,6 +145,22 @@ impl ConnectionHandler for KamilataHandler {
         >,
     > {
         // This is where we receive shit
+        todo!()
+    }
+}
+
+struct KamilataHandlerProto {
+
+}
+
+impl IntoConnectionHandler for KamilataHandlerProto {
+    type Handler = KamilataHandler;
+
+    fn into_handler(self, remote_peer_id: &PeerId, endpoint: &ConnectedPoint) -> Self::Handler {
+        KamilataHandler::new()
+    }
+
+    fn inbound_protocol(&self) -> <Self::Handler as ConnectionHandler>::InboundProtocol {
         todo!()
     }
 }
