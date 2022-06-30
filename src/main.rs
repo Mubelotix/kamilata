@@ -23,6 +23,7 @@
 mod kamilata;
 use kamilata::*;
 mod prelude;
+use libp2p::{NetworkBehaviour, kad::{Kademlia, store::MemoryStore}};
 use prelude::*;
 
 pub async fn memory_transport(
@@ -48,7 +49,7 @@ pub async fn memory_transport(
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<ping::Behaviour>,
+    swarm: Swarm<Kamilata>,
     addr: Multiaddr,
 }
 
@@ -65,7 +66,8 @@ impl Client {
         // For illustrative purposes, the ping protocol is configured to
         // keep the connection alive, so a continuous sequence of pings
         // can be observed.
-        let behaviour = ping::Behaviour::new(ping::Config::new().with_keep_alive(true));
+        let behaviour = Kamilata::new();
+    
     
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
     

@@ -1,6 +1,6 @@
-use std::{iter, pin::Pin};
+use std::{iter, pin::Pin, task::{Poll, Context}};
 use futures::{Future, prelude::*};
-use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol, NetworkBehaviour}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade, PeerId};
+use libp2p::{swarm::{IntoConnectionHandler, ConnectionHandler, SubstreamProtocol, NetworkBehaviour, NetworkBehaviourAction, PollParameters, ConnectionHandlerEvent, KeepAlive}, core::{ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo, connection::ConnectionId}, InboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}, OutboundUpgrade, PeerId};
 
 #[derive(Debug, Clone, Default)]
 pub struct KamilataProtocolConfig {}
@@ -24,6 +24,7 @@ impl UpgradeInfo for KamilataProtocolConfig {
 pub struct KamilataHandshakeOutput {
 
 }
+
 pub enum KamilataHandshakeError {
 
 }
@@ -65,16 +66,16 @@ where
 }
 
 #[derive(Debug)]
-enum KamilataHandlerIn {
+pub enum KamilataHandlerIn {
 
 }
 
 #[derive(Debug)]
-enum KamilataHandlerEvent {
+pub enum KamilataHandlerEvent {
 
 }
 
-struct KamilataHandler {
+pub struct KamilataHandler {
 
 }
 
@@ -129,27 +130,26 @@ impl ConnectionHandler for KamilataHandler {
         todo!()
     }
 
-    fn connection_keep_alive(&self) -> libp2p::swarm::KeepAlive {
-        todo!()
+    fn connection_keep_alive(&self) -> KeepAlive {
+        KeepAlive::Yes
     }
 
     fn poll(
         &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<
-        libp2p::swarm::ConnectionHandlerEvent<
+        cx: &mut Context<'_>,
+    ) -> Poll<
+        ConnectionHandlerEvent<
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
             Self::OutEvent,
             Self::Error,
         >,
     > {
-        // This is where we receive shit
-        todo!()
+        Poll::Pending
     }
 }
 
-struct KamilataHandlerProto {
+pub struct KamilataHandlerProto {
 
 }
 
@@ -161,15 +161,22 @@ impl IntoConnectionHandler for KamilataHandlerProto {
     }
 
     fn inbound_protocol(&self) -> <Self::Handler as ConnectionHandler>::InboundProtocol {
-        todo!()
+        upgrade::EitherUpgrade::A(KamilataProtocolConfig::new()) // Should be KamilataHandlerConfig
     }
 }
 
-enum KamilataEvent {
+impl KamilataHandlerProto {
+    pub fn new() -> KamilataHandlerProto {
+        KamilataHandlerProto {}
+    }
+}
+
+#[derive(Debug)]
+pub enum KamilataEvent {
 
 }
 
-struct Kamilata {
+pub struct Kamilata {
 
 }
 
@@ -178,23 +185,31 @@ impl NetworkBehaviour for Kamilata {
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        todo!()
+        KamilataHandlerProto::new()
     }
 
     fn inject_event(
         &mut self,
         peer_id: PeerId,
-        connection: libp2p::core::connection::ConnectionId,
-        event: <<Self::ConnectionHandler as libp2p::swarm::IntoConnectionHandler>::Handler as libp2p::swarm::ConnectionHandler>::OutEvent,
+        connection: ConnectionId,
+        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
         todo!()
     }
 
     fn poll(
         &mut self,
-        cx: &mut std::task::Context<'_>,
-        params: &mut impl libp2p::swarm::PollParameters,
-    ) -> std::task::Poll<libp2p::swarm::NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-        todo!()
+        cx: &mut Context<'_>,
+        params: &mut impl PollParameters,
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        Poll::Pending
+    }
+}
+
+impl Kamilata {
+    pub fn new() -> Kamilata {
+        Kamilata {
+            
+        }
     }
 }
