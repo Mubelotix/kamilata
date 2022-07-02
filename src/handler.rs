@@ -34,6 +34,21 @@ async fn foo(stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
     todo!()
 }
 
+async fn bar(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> KamTaskOutput {
+    todo!()
+}
+
+fn bar_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    bar(stream, val).boxed()
+}
+
+fn bar_on_substream(params: usize) -> PendingTask<Box<usize>> {
+    PendingTask {
+        params: Box::new(params),
+        fut: bar_boxed
+    }
+}
+
 pub struct PendingTask<T> {
     params: T,
     fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>
@@ -63,8 +78,8 @@ impl ConnectionHandler for KamilataHandler {
         };
 
         // TODO: prevent DoS
-
-        self.tasks.push(Box::pin(foo(substream)))
+        let task = foo(substream).boxed();
+        self.tasks.push(task)
     }
 
     fn inject_fully_negotiated_outbound(
