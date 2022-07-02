@@ -4,11 +4,11 @@ use protocol_derive::Protocol;
 pub type Filter = Vec<u8>;  // TODO change to Box<[u8; N]>
 
 #[derive(Protocol, Debug, Clone)]
-pub enum KamRequestPacket {
+pub enum RequestPacket {
 
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub enum KamResponsePacket {
+pub enum ResponsePacket {
 
 }

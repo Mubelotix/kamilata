@@ -21,8 +21,8 @@ impl UpgradeInfo for KamilataProtocolConfig {
     }
 }
 
-type KamInStreamSink<S> = KadStreamSink<S, KamResponsePacket, KamRequestPacket>;
-type KamOutStreamSink<S> = KadStreamSink<S, KamRequestPacket, KamResponsePacket>;
+pub(crate) type KamInStreamSink<S> = KadStreamSink<S, ResponsePacket, RequestPacket>;
+pub(crate) type KamOutStreamSink<S> = KadStreamSink<S, RequestPacket, ResponsePacket>;
 
 impl<S> InboundUpgrade<S> for KamilataProtocolConfig
 where
@@ -41,14 +41,14 @@ where
         future::ok(
             Framed::new(socket, codec)
                 .err_into()
-                .with::<_, _, fn(_) -> _, _>(|response: KamResponsePacket| {
+                .with::<_, _, fn(_) -> _, _>(|response: ResponsePacket| {
                     let stream = response.into_stream(&ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO: error handling
                     });
                     future::ready(stream)
                 })
                 .and_then::<_, fn(_) -> _>(|bytes| {
-                    let request = KamRequestPacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
+                    let request = RequestPacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO: error handling
                     });
                     future::ready(request)
@@ -74,14 +74,14 @@ where
         future::ok(
             Framed::new(socket, codec)
                 .err_into()
-                .with::<_, _, fn(_) -> _, _>(|request: KamRequestPacket| {
+                .with::<_, _, fn(_) -> _, _>(|request: RequestPacket| {
                     let stream = request.into_stream(&ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO error handling
                     });
                     future::ready(stream)
                 })
                 .and_then::<_, fn(_) -> _>(|bytes| {
-                    let response = KamResponsePacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
+                    let response = ResponsePacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO error handling
                     });
                     future::ready(response)
