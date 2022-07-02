@@ -1,5 +1,5 @@
 use std::sync::Arc;
-
+use future::FutureExt;
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
 
 use crate::prelude::*;
@@ -19,7 +19,7 @@ pub enum KamTaskOutput {
 }
 
 pub struct KamilataHandler {
-    tasks: Vec<Box<dyn Future<Output = KamTaskOutput> + Send>>,
+    tasks: Vec<Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>>,
 }
 
 impl KamilataHandler {
@@ -36,7 +36,7 @@ async fn foo(stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
 
 pub struct PendingTask<T> {
     params: T,
-    fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Box<dyn Future<Output = KamTaskOutput> + Send>
+    fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>
 }
 
 impl ConnectionHandler for KamilataHandler {
@@ -64,7 +64,7 @@ impl ConnectionHandler for KamilataHandler {
 
         // TODO: prevent DoS
 
-        self.tasks.push(Box::new(foo(substream)))
+        self.tasks.push(Box::pin(foo(substream)))
     }
 
     fn inject_fully_negotiated_outbound(
@@ -103,7 +103,17 @@ impl ConnectionHandler for KamilataHandler {
             Self::Error,
         >,
     > {
-        
+        // Poll tasks
+        for task in &mut self.tasks {
+            match task.poll_unpin(cx) {
+                Poll::Ready(output) => match output {
+                    
+                }
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
+            }
+        }
 
         Poll::Pending
     }
