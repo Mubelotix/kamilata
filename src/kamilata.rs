@@ -1,4 +1,6 @@
-
+use asynchronous_codec::Framed;
+use libp2p::kad::protocol::KadStreamSink;
+use unsigned_varint::codec::UviBytes;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Default)]
@@ -19,37 +21,72 @@ impl UpgradeInfo for KamilataProtocolConfig {
     }
 }
 
-pub enum KamilataHandshakeError {
+type KamInStreamSink<S> = KadStreamSink<S, KamResponsePacket, KamRequestPacket>;
+type KamOutStreamSink<S> = KadStreamSink<S, KamRequestPacket, KamResponsePacket>;
 
-}
-
-impl<TSocket> InboundUpgrade<TSocket> for KamilataProtocolConfig
+impl<S> InboundUpgrade<S> for KamilataProtocolConfig
 where
-    TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    S: AsyncRead + AsyncWrite + Unpin,
 {
-    type Output = TSocket;
-    type Error = KamilataHandshakeError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = KamInStreamSink<S>;
+    type Error = ioError;
+    type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
-            Ok(socket)
-        })
+    fn upgrade_inbound(self, socket: S, _: Self::Info) -> Self::Future {
+        use protocol::{Parcel, Settings as ProtocolSettings};
+
+        let mut codec = UviBytes::default();
+        codec.set_max_len(5_000_000); // TODO: Change this value
+
+        future::ok(
+            Framed::new(socket, codec)
+                .err_into()
+                .with::<_, _, fn(_) -> _, _>(|response: KamResponsePacket| {
+                    let stream = response.into_stream(&ProtocolSettings::default()).map_err(|e| {
+                        ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO: error handling
+                    });
+                    future::ready(stream)
+                })
+                .and_then::<_, fn(_) -> _>(|bytes| {
+                    let request = KamRequestPacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
+                        ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO: error handling
+                    });
+                    future::ready(request)
+                }),
+        )
     }
 }
 
-impl<TSocket> OutboundUpgrade<TSocket> for KamilataProtocolConfig
+impl<S> OutboundUpgrade<S> for KamilataProtocolConfig
 where
-    TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    S: AsyncRead + AsyncWrite + Unpin,
 {
-    type Output = TSocket;
-    type Error = KamilataHandshakeError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+    type Output = KamOutStreamSink<S>;
+    type Error = ioError;
+    type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
-            Ok(socket)
-        })
+    fn upgrade_outbound(self, socket: S, _: Self::Info) -> Self::Future {
+        use protocol::{Parcel, Settings as ProtocolSettings};
+
+        let mut codec = UviBytes::default();
+        codec.set_max_len(5_000_000); // TODO: Change this value
+
+        future::ok(
+            Framed::new(socket, codec)
+                .err_into()
+                .with::<_, _, fn(_) -> _, _>(|request: KamRequestPacket| {
+                    let stream = request.into_stream(&ProtocolSettings::default()).map_err(|e| {
+                        ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO error handling
+                    });
+                    future::ready(stream)
+                })
+                .and_then::<_, fn(_) -> _>(|bytes| {
+                    let response = KamResponsePacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
+                        ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO error handling
+                    });
+                    future::ready(response)
+                }),
+        )
     }
 }
 

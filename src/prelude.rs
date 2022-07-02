@@ -5,4 +5,4 @@ pub use libp2p::{identity, ping, Multiaddr, PeerId};
 pub use libp2p::core::{transport::MemoryTransport, ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo, connection::ConnectionId};
 pub use libp2p::{Transport, InboundUpgrade, OutboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}};
 pub use crate::{packets::*, handler::*, kamilata::*};
-pub use std::{error::Error, iter, pin::Pin, task::{Poll, Context}};
+pub use std::{error::Error, io::Error as ioError, iter, pin::Pin, task::{Poll, Context}};
