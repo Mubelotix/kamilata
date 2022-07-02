@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
 
 use crate::prelude::*;
@@ -12,78 +14,29 @@ pub enum KamilataHandlerEvent {
 
 }
 
-enum InSubstreamState {
-    WaitingForRequest,
-    PendingSend(RequestPacket),
-    PendingFlush,
-}
+pub enum KamTaskOutput {
 
-enum OutSubstreamState {
-    PendingSend(RequestPacket),
-    PendingFlush,
-    WaitingForResponse,
-}
-
-struct InSubstreamWithState {
-    substream: KamInStreamSink<NegotiatedSubstream>,
-    state: InSubstreamState,
-}
-
-struct OutSubstreamWithState {
-    substream: KamOutStreamSink<NegotiatedSubstream>,
-    state: OutSubstreamState,
-}
-
-impl OutSubstreamWithState {
-    fn advance(self, cx: &mut Context<'_>) -> (
-        Option<Self>,
-        Option<ConnectionHandlerEvent<
-            KamilataProtocolConfig,
-            RequestPacket,
-            KamilataHandlerEvent,
-            ioError,
-        >>,
-        bool,
-    ) {
-        use OutSubstreamState::*;
-        let OutSubstreamWithState { mut substream, state } = self;
-        
-        match state {
-            PendingSend(request) => match Sink::poll_ready(Pin::new(&mut substream), cx) {
-                Poll::Ready(Ok(())) => match Sink::start_send(Pin::new(&mut substream), request) {
-                    Ok(()) => (Some(OutSubstreamWithState { substream, state: PendingFlush }), None, true),
-                    Err(e) => todo!(),
-                },
-                Poll::Pending => (Some(OutSubstreamWithState { substream, state: PendingSend(request) }), None, false),
-                Poll::Ready(Err(e)) => todo!(),
-            }
-            PendingFlush => match Sink::poll_flush(Pin::new(&mut substream), cx) {
-                Poll::Ready(Ok(())) => (Some(OutSubstreamWithState { substream, state: WaitingForResponse }), None, true),
-                Poll::Pending => todo!(),
-                Poll::Ready(Err(e)) => todo!(),
-            }
-            WaitingForResponse => match Stream::poll_next(Pin::new(&mut substream), cx) {
-                Poll::Ready(Some(Ok(response))) => todo!(),
-                Poll::Pending => todo!(),
-                Poll::Ready(None) => todo!(),
-                Poll::Ready(Some(Err(e))) => todo!(),
-            }
-        }
-    }
 }
 
 pub struct KamilataHandler {
-    inbound_substreams: Vec<InSubstreamWithState>,
-    outbound_substreams: Vec<OutSubstreamWithState>,
+    tasks: Vec<Box<dyn Future<Output = KamTaskOutput> + Send>>,
 }
 
 impl KamilataHandler {
     pub fn new() -> Self {
         KamilataHandler {
-            inbound_substreams: Vec::new(),
-            outbound_substreams: Vec::new(),
+            tasks: Vec::new(),
         }
     }
+}
+
+async fn foo(stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
+    todo!()
+}
+
+pub struct PendingTask<T> {
+    params: T,
+    fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Box<dyn Future<Output = KamTaskOutput> + Send>
 }
 
 impl ConnectionHandler for KamilataHandler {
@@ -93,7 +46,7 @@ impl ConnectionHandler for KamilataHandler {
     type InboundProtocol = EitherUpgrade<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;
     type InboundOpenInfo = ();
-    type OutboundOpenInfo = RequestPacket;
+    type OutboundOpenInfo = PendingTask<Box<dyn std::any::Any + Send>>;
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(upgrade::EitherUpgrade::A)
@@ -111,21 +64,16 @@ impl ConnectionHandler for KamilataHandler {
 
         // TODO: prevent DoS
 
-        self.inbound_substreams.push(InSubstreamWithState {
-            substream,
-            state: InSubstreamState::WaitingForRequest,
-        });
+        self.tasks.push(Box::new(foo(substream)))
     }
 
     fn inject_fully_negotiated_outbound(
         &mut self,
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
-        request: Self::OutboundOpenInfo,
+        pending_task: Self::OutboundOpenInfo,
     ) {
-        self.outbound_substreams.push(OutSubstreamWithState {
-            substream,
-            state: OutSubstreamState::PendingSend(request),
-        });
+        let task = (pending_task.fut)(substream, pending_task.params);
+        self.tasks.push(task);
     }
 
     fn inject_event(&mut self, event: Self::InEvent) {
@@ -155,36 +103,7 @@ impl ConnectionHandler for KamilataHandler {
             Self::Error,
         >,
     > {
-        for n in (0..self.outbound_substreams.len()).rev() {
-            let mut substream = self.outbound_substreams.swap_remove(n);
-
-            loop {
-                match substream.advance(cx)
-                {
-                    (Some(new_state), Some(event), _) => {
-                        self.outbound_substreams.push(new_state);
-                        return Poll::Ready(event);
-                    }
-                    (None, Some(event), _) => {
-                        // if self.outbound_substreams.is_empty() {
-                        //     self.keep_alive = KeepAlive::Until(Instant::now() + self.config.idle_timeout);
-                        // }
-                        return Poll::Ready(event);
-                    }
-                    (Some(new_state), None, false) => {
-                        self.outbound_substreams.push(new_state);
-                        break;
-                    }
-                    (Some(new_state), None, true) => {
-                        substream = new_state;
-                        continue;
-                    }
-                    (None, None, _) => {
-                        break;
-                    }
-                }
-            }
-        }
+        
 
         Poll::Pending
     }
