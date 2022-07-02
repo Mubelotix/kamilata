@@ -33,16 +33,13 @@ impl<TSocket> InboundUpgrade<TSocket> for KamilataProtocolConfig
 where
     TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
-    type Output = KamilataHandshakeOutput;
+    type Output = TSocket;
     type Error = KamilataHandshakeError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_inbound(self, mut socket: TSocket, _: Self::Info) -> Self::Future {
+    fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
         Box::pin(async move {
-            // TODO see floodsub
-            Ok(KamilataHandshakeOutput {
-
-            })
+            Ok(socket)
         })
     }
 }
@@ -51,16 +48,13 @@ impl<TSocket> OutboundUpgrade<TSocket> for KamilataProtocolConfig
 where
     TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
-    type Output = KamilataHandshakeOutput;
+    type Output = TSocket;
     type Error = KamilataHandshakeError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_outbound(self, mut socket: TSocket, _: Self::Info) -> Self::Future {
+    fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
         Box::pin(async move {
-            // TODO see floodsub
-            Ok(KamilataHandshakeOutput {
-
-            })
+            Ok(socket)
         })
     }
 }
@@ -76,7 +70,6 @@ pub enum KamilataHandlerEvent {
 }
 
 pub struct KamilataHandler {
-
 }
 
 impl KamilataHandler {

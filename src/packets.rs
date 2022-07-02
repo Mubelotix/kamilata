@@ -1,7 +1,7 @@
 use protocol::Parcel;
 use protocol_derive::Protocol;
 
-pub type Filter = Box<[u8; 65536]>;  // TODO change 65536 to a const generic
+pub type Filter = Vec<u8>;  // TODO change to Box<[u8; N]>
 
 #[derive(Protocol, Debug, Clone)]
 pub enum Packet {
@@ -16,5 +16,5 @@ pub struct UpdateFiltersPacket {
 
 #[derive(Protocol, Debug, Clone)]
 pub struct DummyPacket {
-    foo: usize,
+    foo: u64,
 }
