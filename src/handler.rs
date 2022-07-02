@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use future::FutureExt;
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
 
 use crate::prelude::*;
@@ -14,27 +12,62 @@ pub enum KamilataHandlerEvent {
 
 }
 
-pub enum KamTaskOutput {
+type Task = Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>;
 
+pub struct PendingTask<T> {
+    params: T,
+    #[allow(clippy::type_complexity)]
+    fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Task
+}
+
+pub enum KamTaskOutput {
+    SetInboundRefreshTask(Task)
 }
 
 pub struct KamilataHandler {
-    tasks: Vec<Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>>,
+    inbound_refresh_task: Option<Task>,
+    tasks: Vec<Task>,
 }
 
 impl KamilataHandler {
     pub fn new() -> Self {
         KamilataHandler {
+            inbound_refresh_task: None,
             tasks: Vec::new(),
         }
     }
 }
 
-async fn foo(stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
-    todo!()
+async fn inbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket) -> KamTaskOutput {
+    refresh_packet.range = refresh_packet.range.clamp(0, 10);
+    refresh_packet.interval = refresh_packet.interval.clamp(15*1000, 5*60*1000);
+
+    stream.start_send_unpin(ResponsePacket::ConfirmRefresh(refresh_packet.clone())).unwrap();
+    stream.flush().await.unwrap();
+
+    loop {
+        // TODO: send actual packets
+
+        sleep(Duration::from_millis(refresh_packet.interval as u64)).await;
+    }
 }
 
-async fn bar(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> KamTaskOutput {
+async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
+    let request = stream.next().await.unwrap().unwrap();
+
+    match request {
+        RequestPacket::SetRefresh(refresh_packet) => {
+            let task = inbound_refresh(stream, refresh_packet);
+            KamTaskOutput::SetInboundRefreshTask(task.boxed())
+        },
+        RequestPacket::FindPeers(_) => todo!(),
+        RequestPacket::Search(_) => todo!(),
+        RequestPacket::RewardPeer(_) => todo!(),
+        RequestPacket::Disconnect(_) => todo!(),
+    }
+}
+
+/*async fn bar(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> KamTaskOutput {
     todo!()
 }
 
@@ -47,12 +80,9 @@ fn bar_on_substream(params: usize) -> PendingTask<Box<usize>> {
         params: Box::new(params),
         fut: bar_boxed
     }
-}
+}*/
 
-pub struct PendingTask<T> {
-    params: T,
-    fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>
-}
+
 
 impl ConnectionHandler for KamilataHandler {
     type InEvent = KamilataHandlerIn;
@@ -78,7 +108,7 @@ impl ConnectionHandler for KamilataHandler {
         };
 
         // TODO: prevent DoS
-        let task = foo(substream).boxed();
+        let task = handle_request(substream).boxed();
         self.tasks.push(task)
     }
 
@@ -122,13 +152,14 @@ impl ConnectionHandler for KamilataHandler {
         for task in &mut self.tasks {
             match task.poll_unpin(cx) {
                 Poll::Ready(output) => match output {
-                    
+                    KamTaskOutput::SetInboundRefreshTask(task) => self.inbound_refresh_task = Some(task),
                 }
                 Poll::Pending => {
                     return Poll::Pending;
                 }
             }
         }
+        // TODO poll inbound refresh task
 
         Poll::Pending
     }

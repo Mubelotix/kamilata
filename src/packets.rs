@@ -2,6 +2,8 @@ use crate::prelude::*;
 use protocol::Parcel;
 use protocol_derive::Protocol;
 
+// TODO everything pub crate
+
 type PeerId = Vec<u8>;  // TODO change to libp2p PeerId
 
 #[derive(Protocol, Debug, Clone)]
@@ -28,12 +30,12 @@ pub struct RefreshPacket {
     /// Which filters we want to receive.
     /// The farthest filter will be at a distance of `range`.
     /// The closest filter will always be 0 so the number of filters will be `range + 1`.
-    range: u8,
+    pub range: u8,
     /// Milliseconds between each update.
     /// This does not force packets to be sent as they will still wait for the filters to change before updating them.
-    interval: u16,
+    pub interval: u16,
     /// Peers we don't want to hear from because we think they are malicious.
-    blocked_peers: Vec<PeerId>,
+    pub blocked_peers: Vec<PeerId>,
 }
 
 #[derive(Protocol, Debug, Clone)]
