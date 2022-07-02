@@ -1,4 +1,4 @@
-pub use futures::{future::join, prelude::*};
+pub use futures::{future::join, prelude::*, FutureExt};
 pub use libp2p::identity::Keypair;
 pub use libp2p::swarm::{Swarm, SwarmEvent, NetworkBehaviour, IntoConnectionHandler, ConnectionHandler, SubstreamProtocol, NetworkBehaviourAction, PollParameters, ConnectionHandlerEvent, KeepAlive};
 pub use libp2p::{identity, ping, Multiaddr, PeerId};
