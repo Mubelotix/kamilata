@@ -5,6 +5,7 @@ use protocol_derive::Protocol;
 // TODO everything pub crate
 
 type PeerId = Vec<u8>;  // TODO change to libp2p PeerId
+type Filter = Vec<u8>;
 
 #[derive(Protocol, Debug, Clone)]
 pub enum RequestPacket {
@@ -38,6 +39,16 @@ pub struct RefreshPacket {
     pub blocked_peers: Vec<PeerId>,
 }
 
+impl Default for RefreshPacket {
+    fn default() -> Self {
+        RefreshPacket {
+            range: 6,
+            interval: 21 * 1000,
+            blocked_peers: Vec::new(),
+        }
+    }
+}
+
 #[derive(Protocol, Debug, Clone)]
 pub struct FindPeersPacket {
     /// The maximum distance at which the query can be found from that peer.
@@ -67,12 +78,20 @@ pub enum ResponsePacket {
     /// The responder has the final say on the settings.
     /// The requester should disconnect if the peers cannot agree.
     ConfirmRefresh(RefreshPacket),
+    /// Sent periodically to inform the peers of our filters.
+    UpdateFilters(UpdateFiltersPacket),
     /// Response to a [RequestPacket::FindPeers] packet.
     ReturnPeers(ReturnPeersPacket),
     /// Response to a [RequestPacket::Search] packet.
     ReturnResults(ReturnResultsPacket),
 
     Disconnect(DisconnectPacket),
+}
+
+#[derive(Protocol, Debug, Clone)]
+pub struct UpdateFiltersPacket {
+    /// The filters ordered from distance 0 to the furthest at a distance of [RefreshPacket::range].
+    pub filters: Vec<Filter>,
 }
 
 #[derive(Protocol, Debug, Clone)]
@@ -97,8 +116,8 @@ pub struct ReturnResultsPacket {
 #[derive(Protocol, Debug, Clone)]
 pub struct DisconnectPacket {
     /// The reason for the disconnection.
-    reason: String,
+    pub reason: String,
     /// Asks the peer to reconnect after a certain amount of time.
     /// None if we never want to hear about that peer again.
-    try_again_in: Option<u16>,
+    pub try_again_in: Option<u32>,
 }

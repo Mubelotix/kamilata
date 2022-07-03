@@ -22,6 +22,8 @@ pub struct PendingTask<T> {
 }
 
 pub enum KamTaskOutput {
+    None,
+    Disconnect(DisconnectPacket),
     SetOutboundRefreshTask(Task)
 }
 
@@ -73,8 +75,38 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> Kam
     }
 }
 
-async fn inbound_refresh(stream: KamOutStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
-    todo!()
+async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
+    // Send our refresh request
+    let demanded_refresh_packet = RefreshPacket::default(); // TODO: from config
+    stream.start_send_unpin(RequestPacket::SetRefresh(demanded_refresh_packet.clone())).unwrap();
+    stream.flush().await.unwrap();
+
+    // Receive the response
+    let response = stream.next().await.unwrap().unwrap();
+    let refresh_packet = match response {
+        ResponsePacket::ConfirmRefresh(refresh_packet) => refresh_packet,
+        _ => return KamTaskOutput::None,
+    };
+
+    // Check response
+    for blocked_peer in demanded_refresh_packet.blocked_peers {
+        if !refresh_packet.blocked_peers.contains(&blocked_peer) {
+            return KamTaskOutput::Disconnect(DisconnectPacket {
+                reason: String::from("Could not agree on a refresh packet: blocked peer has been unblocked"),
+                try_again_in: Some(86400),
+            });
+        }
+    }
+
+    // Receive filters
+    loop {
+        let packet = stream.next().await.unwrap().unwrap();
+        let packet = match packet {
+            ResponsePacket::UpdateFilters(packet) => packet,
+            _ => return KamTaskOutput::None,
+        };
+    
+    }
 }
 
 fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, _val: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
@@ -171,13 +203,20 @@ impl ConnectionHandler for KamilataHandler {
                     KamTaskOutput::SetOutboundRefreshTask(outbound_refresh_task) => {
                         self.tasks.insert(0, outbound_refresh_task);
                     },
+                    KamTaskOutput::Disconnect(disconnect_packet) => {
+                        // TODO: send packet
+                        return Poll::Ready(ConnectionHandlerEvent::Close(
+                            ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
+                        ));
+                    },
+                    KamTaskOutput::None => (),
                 }
                 Poll::Pending => {
                     return Poll::Pending;
                 }
             }
         }
-        
+
         Poll::Pending
     }
 }
