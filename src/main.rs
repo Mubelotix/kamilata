@@ -25,6 +25,7 @@ use kamilata::*;
 mod prelude;
 mod packets;
 mod handler;
+mod counter;
 use packets::*;
 use libp2p::{NetworkBehaviour, kad::{Kademlia, store::MemoryStore}};
 use prelude::*;

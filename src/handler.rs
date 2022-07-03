@@ -1,5 +1,5 @@
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
-use std::time::Instant;
+use std::{time::Instant, collections::HashMap};
 
 use crate::prelude::*;
 
@@ -27,18 +27,19 @@ pub enum KamTaskOutput {
 
 pub struct KamilataHandler {
     first_poll: bool,
-    inbound_refresh_task: Option<Task>,
-    outbound_refresh_task: Option<Task>,
-    tasks: Vec<Task>,
+    task_counter: Counter,
+    /// Tasks associated with task identifiers.  
+    /// Reserved IDs:
+    ///     0: outbound refresh task
+    tasks: HashMap<u32, Task>,
 }
 
 impl KamilataHandler {
     pub fn new() -> Self {
         KamilataHandler {
             first_poll: true,
-            inbound_refresh_task: None,
-            outbound_refresh_task: None,
-            tasks: Vec::new(),
+            task_counter: Counter::new(1),
+            tasks: HashMap::new(),
         }
     }
 }
@@ -112,7 +113,7 @@ impl ConnectionHandler for KamilataHandler {
 
         // TODO: prevent DoS
         let task = handle_request(substream).boxed();
-        self.tasks.push(task)
+        self.tasks.insert(self.task_counter.next(), task);
     }
 
     fn inject_fully_negotiated_outbound(
@@ -121,7 +122,7 @@ impl ConnectionHandler for KamilataHandler {
         pending_task: Self::OutboundOpenInfo,
     ) {
         let task = (pending_task.fut)(substream, pending_task.params);
-        self.tasks.push(task);
+        self.tasks.insert(self.task_counter.next(), task);
     }
 
     fn inject_event(&mut self, event: Self::InEvent) {
@@ -162,18 +163,21 @@ impl ConnectionHandler for KamilataHandler {
         }
 
         // Poll tasks
-        for task in &mut self.tasks {
+        for tid in self.tasks.keys().copied().collect::<Vec<u32>>() {
+            let task = self.tasks.get_mut(&tid).unwrap();
+
             match task.poll_unpin(cx) {
                 Poll::Ready(output) => match output {
-                    KamTaskOutput::SetOutboundRefreshTask(task) => self.outbound_refresh_task = Some(task),
+                    KamTaskOutput::SetOutboundRefreshTask(outbound_refresh_task) => {
+                        self.tasks.insert(0, outbound_refresh_task);
+                    },
                 }
                 Poll::Pending => {
                     return Poll::Pending;
                 }
             }
         }
-        // TODO poll inbound refresh task
-
+        
         Poll::Pending
     }
 }
