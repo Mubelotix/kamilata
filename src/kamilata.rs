@@ -7,6 +7,7 @@ use crate::prelude::*;
 pub struct KamilataProtocolConfig {}
 
 impl KamilataProtocolConfig {
+    // TODO: remove because used too often
     pub fn new() -> KamilataProtocolConfig {
         KamilataProtocolConfig {}
     }

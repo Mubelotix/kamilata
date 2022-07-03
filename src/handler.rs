@@ -1,4 +1,5 @@
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
+use std::time::Instant;
 
 use crate::prelude::*;
 
@@ -21,26 +22,30 @@ pub struct PendingTask<T> {
 }
 
 pub enum KamTaskOutput {
-    SetInboundRefreshTask(Task)
+    SetOutboundRefreshTask(Task)
 }
 
 pub struct KamilataHandler {
+    first_poll: bool,
     inbound_refresh_task: Option<Task>,
+    outbound_refresh_task: Option<Task>,
     tasks: Vec<Task>,
 }
 
 impl KamilataHandler {
     pub fn new() -> Self {
         KamilataHandler {
+            first_poll: true,
             inbound_refresh_task: None,
+            outbound_refresh_task: None,
             tasks: Vec::new(),
         }
     }
 }
 
-async fn inbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket) -> KamTaskOutput {
+async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket) -> KamTaskOutput {
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
-    refresh_packet.interval = refresh_packet.interval.clamp(15*1000, 5*60*1000);
+    refresh_packet.interval = refresh_packet.interval.clamp(15*1000, 5*60*1000); // TODO config
 
     stream.start_send_unpin(ResponsePacket::ConfirmRefresh(refresh_packet.clone())).unwrap();
     stream.flush().await.unwrap();
@@ -57,8 +62,8 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> Kam
 
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
-            let task = inbound_refresh(stream, refresh_packet);
-            KamTaskOutput::SetInboundRefreshTask(task.boxed())
+            let task = outbound_refresh(stream, refresh_packet);
+            KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::FindPeers(_) => todo!(),
         RequestPacket::Search(_) => todo!(),
@@ -67,22 +72,20 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> Kam
     }
 }
 
-/*async fn bar(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> KamTaskOutput {
+async fn inbound_refresh(stream: KamOutStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
     todo!()
 }
 
-fn bar_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<usize>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
-    bar(stream, val).boxed()
+fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, _val: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    inbound_refresh(stream).boxed()
 }
 
-fn bar_on_substream(params: usize) -> PendingTask<Box<usize>> {
+fn pending_inbound_refresh() -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
-        params: Box::new(params),
-        fut: bar_boxed
+        params: Box::new(()),
+        fut: inbound_refresh_boxed
     }
-}*/
-
-
+}
 
 impl ConnectionHandler for KamilataHandler {
     type InEvent = KamilataHandlerIn;
@@ -148,11 +151,21 @@ impl ConnectionHandler for KamilataHandler {
             Self::Error,
         >,
     > {
+        if self.first_poll {
+            self.first_poll = false;
+
+            let pending_task = pending_inbound_refresh();
+            // TODO it is assumed that it cannot fail. Is this correct?
+            return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
+                protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), pending_task),
+            })
+        }
+
         // Poll tasks
         for task in &mut self.tasks {
             match task.poll_unpin(cx) {
                 Poll::Ready(output) => match output {
-                    KamTaskOutput::SetInboundRefreshTask(task) => self.inbound_refresh_task = Some(task),
+                    KamTaskOutput::SetOutboundRefreshTask(task) => self.outbound_refresh_task = Some(task),
                 }
                 Poll::Pending => {
                     return Poll::Pending;
