@@ -26,6 +26,7 @@ mod prelude;
 mod packets;
 mod handler;
 mod counter;
+mod filters;
 use packets::*;
 use libp2p::{NetworkBehaviour, kad::{Kademlia, store::MemoryStore}};
 use prelude::*;
