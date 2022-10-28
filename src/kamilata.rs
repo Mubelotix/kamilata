@@ -1,4 +1,4 @@
-use asynchronous_codec::Framed;
+use asynchronous_codec::{Framed, BytesMut};
 use libp2p::kad::protocol::KadStreamSink;
 use unsigned_varint::codec::UviBytes;
 use crate::prelude::*;
@@ -48,7 +48,7 @@ where
                     });
                     future::ready(stream)
                 })
-                .and_then::<_, fn(_) -> _>(|bytes| {
+                .and_then::<_, fn(_) -> _>(|bytes: BytesMut| {
                     let request = RequestPacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO: error handling
                     });
@@ -81,7 +81,7 @@ where
                     });
                     future::ready(stream)
                 })
-                .and_then::<_, fn(_) -> _>(|bytes| {
+                .and_then::<_, fn(_) -> _>(|bytes: BytesMut| {
                     let response = ResponsePacket::from_raw_bytes(&bytes, &ProtocolSettings::default()).map_err(|e| {
                         ioError::new(std::io::ErrorKind::Other, e.to_string()) // TODO error handling
                     });
