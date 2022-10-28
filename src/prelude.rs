@@ -1,4 +1,4 @@
-pub use crate::{counter::*, handler::*, kamilata::*, packets::*};
+pub use crate::{counter::*, handler::*, kamilata::*, packets::*, config::*};
 pub use futures::{future::join, prelude::*, FutureExt};
 pub use libp2p::{
     core::{

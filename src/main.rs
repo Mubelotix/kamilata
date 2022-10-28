@@ -27,7 +27,7 @@ mod packets;
 mod handler;
 mod counter;
 mod filters;
-use packets::*;
+mod config;
 use prelude::*;
 
 pub async fn memory_transport(
