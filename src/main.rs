@@ -28,7 +28,6 @@ mod handler;
 mod counter;
 mod filters;
 use packets::*;
-use libp2p::{NetworkBehaviour, kad::{Kademlia, store::MemoryStore}};
 use prelude::*;
 
 pub async fn memory_transport(

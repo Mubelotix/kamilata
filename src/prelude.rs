@@ -1,9 +1,29 @@
+pub use crate::{counter::*, handler::*, kamilata::*, packets::*};
 pub use futures::{future::join, prelude::*, FutureExt};
-pub use libp2p::identity::Keypair;
-pub use libp2p::swarm::{Swarm, SwarmEvent, NetworkBehaviour, IntoConnectionHandler, ConnectionHandler, SubstreamProtocol, NetworkBehaviourAction, PollParameters, ConnectionHandlerEvent, KeepAlive};
-pub use libp2p::{identity, ping, Multiaddr, PeerId};
-pub use libp2p::core::{transport::MemoryTransport, ConnectedPoint, upgrade::{EitherUpgrade, DeniedUpgrade, self}, UpgradeInfo, connection::ConnectionId};
-pub use libp2p::{Transport, InboundUpgrade, OutboundUpgrade, kad::protocol::{KadInStreamSink, KadOutStreamSink}};
-pub use crate::{packets::*, handler::*, kamilata::*, counter::*};
-pub use std::{error::Error, io::Error as ioError, iter, pin::Pin, task::{Poll, Context}, time::Duration};
+pub use libp2p::{
+    core::{
+        connection::ConnectionId,
+        transport::MemoryTransport,
+        upgrade::{self, DeniedUpgrade, EitherUpgrade},
+        ConnectedPoint, UpgradeInfo,
+    },
+    identity::{self, Keypair},
+    kad::protocol::{KadInStreamSink, KadOutStreamSink},
+    kad::{store::MemoryStore, Kademlia},
+    ping,
+    swarm::{
+        ConnectionHandler, ConnectionHandlerEvent, IntoConnectionHandler, KeepAlive,
+        NetworkBehaviour, NetworkBehaviourAction, PollParameters, SubstreamProtocol, Swarm,
+        SwarmEvent,
+    },
+    InboundUpgrade, Multiaddr, NetworkBehaviour, OutboundUpgrade, PeerId, Transport,
+};
+pub use std::{
+    error::Error,
+    io::Error as ioError,
+    iter,
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 pub use tokio::time::sleep;
