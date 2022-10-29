@@ -28,6 +28,7 @@ pub enum KamTaskOutput {
 }
 
 pub struct KamilataHandler {
+    remote_peer_id: PeerId,
     first_poll: bool,
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
@@ -37,8 +38,9 @@ pub struct KamilataHandler {
 }
 
 impl KamilataHandler {
-    pub fn new() -> Self {
+    pub fn new(remote_peer_id: PeerId) -> Self {
         KamilataHandler {
+            remote_peer_id,
             first_poll: true,
             task_counter: Counter::new(1),
             tasks: HashMap::new(),
@@ -133,6 +135,7 @@ impl ConnectionHandler for KamilataHandler {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(upgrade::EitherUpgrade::A)
     }
 
+    // When we receive an inbound channel, a task is immediately created to handle the channel.
     fn inject_fully_negotiated_inbound(
         &mut self,
         protocol: <Self::InboundProtocol as InboundUpgradeSend>::Output,
@@ -148,6 +151,7 @@ impl ConnectionHandler for KamilataHandler {
         self.tasks.insert(self.task_counter.next(), task);
     }
 
+    // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
     fn inject_fully_negotiated_outbound(
         &mut self,
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
@@ -157,8 +161,11 @@ impl ConnectionHandler for KamilataHandler {
         self.tasks.insert(self.task_counter.next(), task);
     }
 
+    // Events are sent by the Behavior which we need to obey to.
     fn inject_event(&mut self, event: Self::InEvent) {
-        todo!()
+        match event {
+
+        }
     }
 
     fn inject_dial_upgrade_error(
@@ -218,27 +225,5 @@ impl ConnectionHandler for KamilataHandler {
         }
 
         Poll::Pending
-    }
-}
-
-pub struct KamilataHandlerProto {
-
-}
-
-impl IntoConnectionHandler for KamilataHandlerProto {
-    type Handler = KamilataHandler;
-
-    fn into_handler(self, remote_peer_id: &PeerId, endpoint: &ConnectedPoint) -> Self::Handler {
-        KamilataHandler::new()
-    }
-
-    fn inbound_protocol(&self) -> <Self::Handler as ConnectionHandler>::InboundProtocol {
-        upgrade::EitherUpgrade::A(KamilataProtocolConfig::new()) // Should be KamilataHandlerConfig
-    }
-}
-
-impl KamilataHandlerProto {
-    pub fn new() -> KamilataHandlerProto {
-        KamilataHandlerProto {}
     }
 }

@@ -28,6 +28,7 @@ mod handler;
 mod counter;
 mod filters;
 mod config;
+mod handler_proto;
 use prelude::*;
 
 pub async fn memory_transport(
