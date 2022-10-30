@@ -1,9 +1,57 @@
 use protocol_derive::Protocol;
+use crate::prelude::*;
 
 // TODO everything pub crate
 
-type PeerId = Vec<u8>;  // TODO change to libp2p PeerId
-type Filter = Vec<u8>;
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct PeerId(libp2p::PeerId);
+
+impl protocol::Parcel for PeerId {
+    const TYPE_NAME: &'static str = "PeerId";
+
+    fn read_field(read: &mut dyn std::io::Read,
+                  settings: &protocol::Settings,
+                  hints: &mut protocol::hint::Hints) -> Result<Self, protocol::Error> {
+        let lenght: u16 = protocol::Parcel::read_field(read, settings, hints)?;
+        let mut bytes = vec![0; lenght as usize];
+        read.read_exact(&mut bytes)?;
+        Ok(PeerId(libp2p::PeerId::from_bytes(&bytes).unwrap()))
+    }
+
+    fn write_field(&self, write: &mut dyn std::io::Write,
+             settings: &protocol::Settings,
+             hints: &mut protocol::hint::Hints) -> Result<(), protocol::Error> {
+        let bytes = self.0.to_bytes();
+        let lenght = bytes.len() as u16;
+        lenght.write_field(write, settings, hints)?;
+        write.write_all(&bytes)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for PeerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl PeerId {
+    fn as_libp2p_peer_id(self) -> libp2p::PeerId {
+        self.0
+    }
+}
+
+pub trait HackTraitVecPeerId {
+    fn as_libp2p_peer_ids(self) -> Vec<libp2p::PeerId>;
+}
+impl HackTraitVecPeerId for Vec<PeerId> {
+    fn as_libp2p_peer_ids(self) -> Vec<libp2p::PeerId> {
+        unsafe {
+            std::mem::transmute_copy(&self)
+        }
+    }
+}
 
 #[derive(Protocol, Debug, Clone)]
 pub enum RequestPacket {
@@ -64,7 +112,7 @@ pub enum ResponsePacket {
 #[derive(Protocol, Debug, Clone)]
 pub struct UpdateFiltersPacket {
     /// The filters ordered from distance 0 to the furthest at a distance of [RefreshPacket::range].
-    pub filters: Vec<Filter>,
+    pub filters: Vec<Filter<125000>>,
 }
 
 #[derive(Protocol, Debug, Clone)]

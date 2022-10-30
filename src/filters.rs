@@ -4,10 +4,11 @@ use tokio::sync::RwLock;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct Filter<const N: usize>(Box<[u8; N]>);
 
 impl<const N: usize> Filter<N> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Filter(Box::new([0; N]))
     }
 
@@ -57,13 +58,19 @@ impl<const N: usize> std::ops::BitOr for Filter<N> {
     }
 }
 
-impl<const N: usize> std::ops::BitOrAssign for Filter<N> {
-    fn bitor_assign(&mut self, other: Self) {
+impl<const N: usize> Filter<N> {
+    pub fn bitor_assign_ref(&mut self, other: &Self) {
         for byte_idx in 0..N {
             unsafe {
                 *self.0.get_unchecked_mut(byte_idx) |= *other.0.get_unchecked(byte_idx);
             }
         }
+    }
+}
+
+impl<const N: usize> std::ops::BitOrAssign for Filter<N> {
+    fn bitor_assign(&mut self, other: Self) {
+        self.bitor_assign_ref(&other);
     }
 }
 
@@ -113,6 +120,25 @@ impl<const N: usize> Filters<N> {
         }
 
         Ok(results)
+    }
+}
+
+impl<const N: usize> protocol::Parcel for Filter<N> {
+    const TYPE_NAME: &'static str = "Filter";
+
+    fn read_field(read: &mut dyn std::io::Read,
+                  settings: &protocol::Settings,
+                  hints: &mut protocol::hint::Hints) -> Result<Self, protocol::Error> {
+        let mut bytes = [0; N];
+        read.read_exact(&mut bytes)?;
+        Ok(Filter(Box::new(bytes)))
+    }
+
+    fn write_field(&self, write: &mut dyn std::io::Write,
+             settings: &protocol::Settings,
+             hints: &mut protocol::hint::Hints) -> Result<(), protocol::Error> {
+        write.write_all(self.0.as_slice())?;
+        Ok(())
     }
 }
 
