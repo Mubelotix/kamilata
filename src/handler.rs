@@ -55,9 +55,7 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, our_pe
             let task = outbound_refresh(stream, refresh_packet, our_peer_id);
             KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
-        RequestPacket::FindPeers(_) => todo!(),
         RequestPacket::Search(_) => todo!(),
-        RequestPacket::RewardPeer(_) => todo!(),
         RequestPacket::Disconnect(_) => todo!(),
     }
 }

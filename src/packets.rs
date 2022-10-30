@@ -1,5 +1,3 @@
-use crate::prelude::*;
-use protocol::Parcel;
 use protocol_derive::Protocol;
 
 // TODO everything pub crate
@@ -14,14 +12,8 @@ pub enum RequestPacket {
     /// This packet also marks the used substream as the substream on which all the updates will be sent.
     /// This receiver will instantly reply to this request using a [ResponsePacket::ConfirmRefresh] packet.
     SetRefresh(RefreshPacket),
-    /// Asks for contact information of peers matching our request.
-    /// The receiver will reply with a [ResponsePacket::ReturnPeers] packet.
-    FindPeers(FindPeersPacket),
     /// Asks to apply our query on its documents and return results in the [ResponsePacket::ReturnResults] packet.
     Search(SearchPacket),
-    /// Gives a hint about the usefulness of a peer.
-    /// This can be used to compute reputation of a peer.
-    RewardPeer(RewardPeerPacket),
 
     Disconnect(DisconnectPacket),
 }
@@ -50,25 +42,8 @@ impl Default for RefreshPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct FindPeersPacket {
-    /// The maximum distance at which the query can be found from that peer.
-    range: u8,
-    query: Vec<Vec<u32>>,
-}
-
-#[derive(Protocol, Debug, Clone)]
 pub struct SearchPacket {
-    query: Vec<Vec<String>>,
-}
-
-#[derive(Protocol, Debug, Clone)]
-pub struct RewardPeerPacket {
-    /// The peer id of the peer we want to reward.
-    peer_id: PeerId,
-    /// Some value between -1 and 1 that represents our evaluation of the usefulness of the peer.
-    /// It is adivised to add malicious peers to [RefreshPacket::blocked_peers] to prevent them from causing future harm.
-    reward: f32,
-    // TODO: Maybe add a PoW field to prevent spam of malicious reward packets
+    query: String,
 }
 
 #[derive(Protocol, Debug, Clone)]
@@ -80,10 +55,8 @@ pub enum ResponsePacket {
     ConfirmRefresh(RefreshPacket),
     /// Sent periodically to inform the peers of our filters.
     UpdateFilters(UpdateFiltersPacket),
-    /// Response to a [RequestPacket::FindPeers] packet.
-    ReturnPeers(ReturnPeersPacket),
     /// Response to a [RequestPacket::Search] packet.
-    ReturnResults(ReturnResultsPacket),
+    Results(ResultsPacket),
 
     Disconnect(DisconnectPacket),
 }
@@ -95,22 +68,9 @@ pub struct UpdateFiltersPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct ReturnPeersPacket {
-    /// An array of levels.
-    /// At each level is an array of peers.
-    /// The index of the level is the distance between the searched query and the returned peer.
-    /// The number of levels is defined by the [FindPeersPacket::range] field.
-    /// 
-    /// Note: First item is at a distance of 0, meaning it can at most contain one peer: the sender.
-    peers: Vec<Vec<PeerId>>,
-}
-
-#[derive(Protocol, Debug, Clone)]
-pub struct ReturnResultsPacket {
-    /// Return results, associated with a score.
-    /// The score should be calculated by an algorithm that must be common to all peers, so that scores can be checked locally.
-    results: Vec<(Vec<u8>, f64)>,
-    // TODO: signature so that we can report them
+pub struct ResultsPacket {
+    peers: Vec<(PeerId, Vec<u64>)>,
+    results: Vec<String>,
 }
 
 #[derive(Protocol, Debug, Clone)]
