@@ -28,7 +28,7 @@ pub enum KamTaskOutput {
     SetOutboundRefreshTask(Task)
 }
 
-async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, our_peer_id: PeerId) -> KamTaskOutput {
+async fn broadcast_local_filters(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, our_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Outbound refresh task executing");
     
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
@@ -52,7 +52,7 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, our_pe
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
             println!("{our_peer_id} It's a set refresh");
-            let task = outbound_refresh(stream, refresh_packet, our_peer_id);
+            let task = broadcast_local_filters(stream, refresh_packet, our_peer_id);
             KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::Search(_) => todo!(),
@@ -60,7 +60,7 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, our_pe
     }
 }
 
-async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> KamTaskOutput {
+async fn receive_remote_filters(mut stream: KamOutStreamSink<NegotiatedSubstream>, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Inbound refresh task executing");
 
     // Send our refresh request
@@ -96,15 +96,15 @@ async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, filt
     }
 }
 
-fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+fn receive_remote_filters_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
     let vals: Box<(Arc<RwLock<FilterDb>>, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
-    inbound_refresh(stream, vals.0, vals.1).boxed()
+    receive_remote_filters(stream, vals.0, vals.1).boxed()
 }
 
-fn pending_inbound_refresh(filters: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
+fn pending_receive_remote_filters(filters: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
         params: Box::new((filters, our_peer_id)),
-        fut: inbound_refresh_boxed
+        fut: receive_remote_filters_boxed
     }
 }
 
@@ -215,7 +215,7 @@ impl ConnectionHandler for KamilataHandler {
         if self.first_poll {
             self.first_poll = false;
 
-            let pending_task = pending_inbound_refresh(Arc::clone(&self.filter_db), self.our_peer_id);
+            let pending_task = pending_receive_remote_filters(Arc::clone(&self.filter_db), self.our_peer_id);
             println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
             // TODO it is assumed that it cannot fail. Is this correct?
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
