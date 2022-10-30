@@ -14,7 +14,7 @@ impl NetworkBehaviour for KamilataBehavior {
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        KamilataHandlerProto::new(self.our_peer_id.clone())
+        KamilataHandlerProto::new(self.our_peer_id)
     }
 
     fn inject_event(
