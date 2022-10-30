@@ -5,16 +5,16 @@ pub enum KamilataEvent {
 
 }
 
-pub struct Kamilata {
-
+pub struct KamilataBehavior {
+    our_peer_id: PeerId,
 }
 
-impl NetworkBehaviour for Kamilata {
+impl NetworkBehaviour for KamilataBehavior {
     type ConnectionHandler = KamilataHandlerProto;
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        KamilataHandlerProto::new()
+        KamilataHandlerProto::new(self.our_peer_id.clone())
     }
 
     fn inject_event(
@@ -35,10 +35,10 @@ impl NetworkBehaviour for Kamilata {
     }
 }
 
-impl Kamilata {
-    pub fn new() -> Kamilata {
-        Kamilata {
-            
+impl KamilataBehavior {
+    pub fn new(our_peer_id: PeerId) -> KamilataBehavior {
+        KamilataBehavior {
+            our_peer_id,
         }
     }
 }

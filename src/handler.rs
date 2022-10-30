@@ -1,3 +1,4 @@
+use futures::future::BoxFuture;
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
 use std::{time::Instant, collections::HashMap};
 
@@ -13,7 +14,7 @@ pub enum KamilataHandlerEvent {
 
 }
 
-type Task = Pin<Box<dyn Future<Output = KamTaskOutput> + Send>>;
+type Task = BoxFuture<'static, KamTaskOutput>;
 
 pub struct PendingTask<T> {
     params: T,
@@ -28,8 +29,10 @@ pub enum KamTaskOutput {
 }
 
 pub struct KamilataHandler {
+    our_peer_id: PeerId,
     remote_peer_id: PeerId,
     first_poll: bool,
+    rt_handle: tokio::runtime::Handle,
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
@@ -38,17 +41,22 @@ pub struct KamilataHandler {
 }
 
 impl KamilataHandler {
-    pub fn new(remote_peer_id: PeerId) -> Self {
+    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId) -> Self {
+        let rt_handle = tokio::runtime::Handle::current();
         KamilataHandler {
+            our_peer_id,
             remote_peer_id,
             first_poll: true,
+            rt_handle,
             task_counter: Counter::new(1),
             tasks: HashMap::new(),
         }
     }
 }
 
-async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket) -> KamTaskOutput {
+async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, our_peer_id: PeerId) -> KamTaskOutput {
+    println!("{our_peer_id} Outbound refresh task executing");
+    
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
     refresh_packet.interval = refresh_packet.interval.clamp(15*1000, 5*60*1000); // TODO config
 
@@ -62,12 +70,15 @@ async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut 
     }
 }
 
-async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
+async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, our_peer_id: PeerId) -> KamTaskOutput {
+    println!("{our_peer_id} Handling a request");
+
     let request = stream.next().await.unwrap().unwrap();
 
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
-            let task = outbound_refresh(stream, refresh_packet);
+            println!("{our_peer_id} It's a set refresh");
+            let task = outbound_refresh(stream, refresh_packet, our_peer_id);
             KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::FindPeers(_) => todo!(),
@@ -77,7 +88,9 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>) -> Kam
     }
 }
 
-async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>) -> KamTaskOutput {
+async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, our_peer_id: PeerId) -> KamTaskOutput {
+    println!("{our_peer_id} Inbound refresh task executing");
+
     // Send our refresh request
     let demanded_refresh_packet = RefreshPacket::default(); // TODO: from config
     stream.start_send_unpin(RequestPacket::SetRefresh(demanded_refresh_packet.clone())).unwrap();
@@ -111,13 +124,14 @@ async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>) -> K
     }
 }
 
-fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, _val: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
-    inbound_refresh(stream).boxed()
+fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    let our_peer_id: Box<PeerId> = val.downcast().unwrap(); // TODO: downcast unchecked?
+    inbound_refresh(stream, *our_peer_id).boxed()
 }
 
-fn pending_inbound_refresh() -> PendingTask<Box<dyn std::any::Any + Send>> {
+fn pending_inbound_refresh(our_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
-        params: Box::new(()),
+        params: Box::new(our_peer_id),
         fut: inbound_refresh_boxed
     }
 }
@@ -147,7 +161,7 @@ impl ConnectionHandler for KamilataHandler {
         };
 
         // TODO: prevent DoS
-        let task = handle_request(substream).boxed();
+        let task = handle_request(substream, self.our_peer_id).boxed();
         self.tasks.insert(self.task_counter.next(), task);
     }
 
@@ -191,10 +205,15 @@ impl ConnectionHandler for KamilataHandler {
             Self::Error,
         >,
     > {
+        // It seems this method gets called in a context where the tokio runtime does not exist.
+        // We import that runtime so that we can rely on it.
+        let _rt_enter_guard = self.rt_handle.enter();
+
         if self.first_poll {
             self.first_poll = false;
 
-            let pending_task = pending_inbound_refresh();
+            let pending_task = pending_inbound_refresh(self.our_peer_id);
+            println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
             // TODO it is assumed that it cannot fail. Is this correct?
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                 protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), pending_task),
@@ -206,24 +225,29 @@ impl ConnectionHandler for KamilataHandler {
             let task = self.tasks.get_mut(&tid).unwrap();
 
             match task.poll_unpin(cx) {
-                Poll::Ready(output) => match output {
-                    KamTaskOutput::SetOutboundRefreshTask(outbound_refresh_task) => {
-                        self.tasks.insert(0, outbound_refresh_task);
-                    },
-                    KamTaskOutput::Disconnect(disconnect_packet) => {
-                        // TODO: send packet
-                        return Poll::Ready(ConnectionHandlerEvent::Close(
-                            ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
-                        ));
-                    },
-                    KamTaskOutput::None => (),
+                Poll::Ready(output) => {
+                    println!("{} Task {tid} completed!", self.our_peer_id);
+                    self.tasks.remove(&tid);
+
+                    match output {
+                        KamTaskOutput::SetOutboundRefreshTask(outbound_refresh_task) => {
+                            println!("{} outbound refresh task set", self.our_peer_id);
+                            self.tasks.insert(0, outbound_refresh_task);
+                        },
+                        KamTaskOutput::Disconnect(disconnect_packet) => {
+                            println!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
+                            // TODO: send packet
+                            return Poll::Ready(ConnectionHandlerEvent::Close(
+                                ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
+                            ));
+                        },
+                        KamTaskOutput::None => (),
+                    }
                 }
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
+                Poll::Pending => ()
             }
         }
 
-        Poll::Pending
+        Poll::Pending // FIXME: Will this run again?
     }
 }

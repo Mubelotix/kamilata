@@ -34,7 +34,7 @@ pub struct RefreshPacket {
     pub range: u8,
     /// Milliseconds between each update.
     /// This does not force packets to be sent as they will still wait for the filters to change before updating them.
-    pub interval: u16,
+    pub interval: u64,
     /// Peers we don't want to hear from because we think they are malicious.
     pub blocked_peers: Vec<PeerId>,
 }

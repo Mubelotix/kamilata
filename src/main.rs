@@ -20,8 +20,8 @@
 //! The two nodes establish a connection, negotiate the ping protocol
 //! and begin pinging each other.
 
-mod kamilata;
-use kamilata::*;
+mod behavior;
+use behavior::*;
 mod prelude;
 mod packets;
 mod handler;
@@ -54,7 +54,7 @@ pub async fn memory_transport(
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<Kamilata>,
+    swarm: Swarm<KamilataBehavior>,
     addr: Multiaddr,
 }
 
@@ -71,7 +71,7 @@ impl Client {
         // For illustrative purposes, the ping protocol is configured to
         // keep the connection alive, so a continuous sequence of pings
         // can be observed.
-        let behaviour = Kamilata::new();
+        let behaviour = KamilataBehavior::new(local_peer_id);
     
     
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
