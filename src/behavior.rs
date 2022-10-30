@@ -7,6 +7,7 @@ pub enum KamilataEvent {
 
 pub struct KamilataBehavior {
     our_peer_id: PeerId,
+    filter_db: Arc<RwLock<FilterDb>>
 }
 
 impl NetworkBehaviour for KamilataBehavior {
@@ -14,7 +15,7 @@ impl NetworkBehaviour for KamilataBehavior {
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        KamilataHandlerProto::new(self.our_peer_id)
+        KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.filter_db))
     }
 
     fn inject_event(
@@ -39,6 +40,7 @@ impl KamilataBehavior {
     pub fn new(our_peer_id: PeerId) -> KamilataBehavior {
         KamilataBehavior {
             our_peer_id,
+            filter_db: Arc::new(RwLock::new(FilterDb::new()))
         }
     }
 }

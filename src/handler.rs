@@ -28,32 +28,6 @@ pub enum KamTaskOutput {
     SetOutboundRefreshTask(Task)
 }
 
-pub struct KamilataHandler {
-    our_peer_id: PeerId,
-    remote_peer_id: PeerId,
-    first_poll: bool,
-    rt_handle: tokio::runtime::Handle,
-    task_counter: Counter,
-    /// Tasks associated with task identifiers.  
-    /// Reserved IDs:
-    ///     0: outbound refresh task
-    tasks: HashMap<u32, Task>,
-}
-
-impl KamilataHandler {
-    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId) -> Self {
-        let rt_handle = tokio::runtime::Handle::current();
-        KamilataHandler {
-            our_peer_id,
-            remote_peer_id,
-            first_poll: true,
-            rt_handle,
-            task_counter: Counter::new(1),
-            tasks: HashMap::new(),
-        }
-    }
-}
-
 async fn outbound_refresh(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, our_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Outbound refresh task executing");
     
@@ -88,7 +62,7 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, our_pe
     }
 }
 
-async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, our_peer_id: PeerId) -> KamTaskOutput {
+async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Inbound refresh task executing");
 
     // Send our refresh request
@@ -124,15 +98,46 @@ async fn inbound_refresh(mut stream: KamOutStreamSink<NegotiatedSubstream>, our_
     }
 }
 
-fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, val: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
-    let our_peer_id: Box<PeerId> = val.downcast().unwrap(); // TODO: downcast unchecked?
-    inbound_refresh(stream, *our_peer_id).boxed()
+fn inbound_refresh_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    let vals: Box<(Arc<RwLock<FilterDb>>, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
+    inbound_refresh(stream, vals.0, vals.1).boxed()
 }
 
-fn pending_inbound_refresh(our_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
+fn pending_inbound_refresh(filters: Arc<RwLock<FilterDb>>, our_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
-        params: Box::new(our_peer_id),
+        params: Box::new((filters, our_peer_id)),
         fut: inbound_refresh_boxed
+    }
+}
+
+pub struct KamilataHandler {
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId,
+    filter_db: Arc<RwLock<FilterDb>>,
+
+    first_poll: bool,
+    rt_handle: tokio::runtime::Handle,
+    
+    task_counter: Counter,
+    /// Tasks associated with task identifiers.  
+    /// Reserved IDs:
+    ///     0: outbound refresh task
+    tasks: HashMap<u32, Task>,
+}
+
+impl KamilataHandler {
+    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, filter_db: Arc<RwLock<FilterDb>>) -> Self {
+        let rt_handle = tokio::runtime::Handle::current();
+        KamilataHandler {
+            our_peer_id,
+            remote_peer_id,
+            filter_db,
+
+            first_poll: true,
+            rt_handle,
+            task_counter: Counter::new(1),
+            tasks: HashMap::new(),
+        }
     }
 }
 
@@ -212,7 +217,7 @@ impl ConnectionHandler for KamilataHandler {
         if self.first_poll {
             self.first_poll = false;
 
-            let pending_task = pending_inbound_refresh(self.our_peer_id);
+            let pending_task = pending_inbound_refresh(Arc::clone(&self.filter_db), self.our_peer_id);
             println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
             // TODO it is assumed that it cannot fail. Is this correct?
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
