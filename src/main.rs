@@ -53,46 +53,81 @@ pub async fn memory_transport(
         .boxed())
 }
 
-struct MovieResult {
-    
+pub fn hash_word(word: &str) -> usize {
+    let mut result = 1usize;
+    const RANDOM_SEED: [usize; 16] = [542587211452, 5242354514, 245421154, 4534542154, 542866467, 545245414, 7867569786914, 88797854597, 24542187316, 645785447, 434963879, 4234274, 55418648642, 69454242114688, 74539841, 454214578213];
+    for c in word.bytes() {
+        for i in 0..8 {
+            result = result.overflowing_mul(c as usize + RANDOM_SEED[i*2]).0;
+            result = result.overflowing_add(c as usize + RANDOM_SEED[i*2+1]).0;
+        }
+    }
+    result % (125000 * 8)
 }
 
-impl SearchResult for MovieResult {
+struct BookResult {
+    cid: String,
+    excerpt: String,
+}
+
+impl SearchResult for BookResult {
     type Cid = String;
 
     fn cid(&self) -> &Self::Cid {
-        todo!()
+        &self.cid
     }
 
     fn into_bytes(self) -> Vec<u8> {
-        todo!()
+        let mut data = Vec::new();
+        data.extend_from_slice(&self.cid.len().to_be_bytes());
+        data.extend_from_slice(self.cid.as_bytes());
+        data.extend_from_slice(&self.excerpt.len().to_be_bytes());
+        data.extend_from_slice(self.excerpt.as_bytes());
+        data
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        todo!()
+        let mut bytes = bytes;
+        let cid_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
+        bytes = &bytes[4..];
+        let cid = String::from_utf8(bytes[..cid_len].to_vec()).unwrap();
+        bytes = &bytes[cid_len..];
+        let excerpt_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
+        bytes = &bytes[4..];
+        let excerpt = String::from_utf8(bytes[..excerpt_len].to_vec()).unwrap();
+        bytes = &bytes[excerpt_len..];
+        assert!(bytes.is_empty());
+        BookResult {
+            cid,
+            excerpt,
+        }
     }
 }
 
-struct Movie {
-    data: Vec<u8>
+struct Book {
+    cid: String,
+    text: String,
 }
 
-impl Document for Movie {
-    type SearchResult = MovieResult;
+impl Document for Book {
+    type SearchResult = BookResult;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
-        todo!()
+        &self.cid
     }
 
     fn apply_to_filter(&self, filter: &mut Filter<125000>) {
-        todo!()
+        self.text.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
+            let hash = hash_word(word);
+            filter.set_bit(hash, true);
+        });
     }
 }
 
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<Movie>>,
+    swarm: Swarm<KamilataBehavior<Book>>,
     addr: Multiaddr,
 }
 
