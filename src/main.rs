@@ -30,6 +30,7 @@ mod filters;
 mod config;
 mod handler_proto;
 mod filter_db;
+mod document;
 use prelude::*;
 
 pub async fn memory_transport(

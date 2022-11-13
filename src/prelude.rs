@@ -1,4 +1,7 @@
-pub use crate::{counter::*, handler::*, handler_proto::*, behavior::*, packets::*, config::*, filters::*, filter_db::*};
+pub use crate::{
+    behavior::*, config::*, counter::*, document::*, filter_db::*, filters::*, handler::*,
+    handler_proto::*, packets::*,
+};
 pub use futures::{future::join, prelude::*, FutureExt};
 pub use libp2p::{
     core::{
@@ -19,13 +22,13 @@ pub use libp2p::{
     InboundUpgrade, Multiaddr, NetworkBehaviour, OutboundUpgrade, PeerId, Transport,
 };
 pub use std::{
+    collections::BTreeMap,
     error::Error,
     io::Error as ioError,
     iter,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
     time::Duration,
-    sync::Arc,
-    collections::BTreeMap,
 };
-pub use tokio::{time::sleep, sync::RwLock};
+pub use tokio::{sync::RwLock, time::sleep};
