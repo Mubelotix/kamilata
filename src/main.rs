@@ -29,7 +29,7 @@ mod counter;
 mod filters;
 mod config;
 mod handler_proto;
-mod filter_db;
+mod db;
 mod document;
 use prelude::*;
 
@@ -53,10 +53,46 @@ pub async fn memory_transport(
         .boxed())
 }
 
+struct MovieResult {
+    
+}
+
+impl SearchResult for MovieResult {
+    type Cid = String;
+
+    fn cid(&self) -> &Self::Cid {
+        todo!()
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        todo!()
+    }
+}
+
+struct Movie {
+    data: Vec<u8>
+}
+
+impl Document for Movie {
+    type SearchResult = MovieResult;
+
+    fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
+        todo!()
+    }
+
+    fn apply_to_filter(&self, filter: &mut Filter<125000>) {
+        todo!()
+    }
+}
+
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior>,
+    swarm: Swarm<KamilataBehavior<Movie>>,
     addr: Multiaddr,
 }
 

@@ -1,5 +1,5 @@
 pub use crate::{
-    behavior::*, config::*, counter::*, document::*, filter_db::*, filters::*, handler::*,
+    behavior::*, config::*, counter::*, document::*, db::*, filters::*, handler::*,
     handler_proto::*, packets::*,
 };
 pub use futures::{future::join, prelude::*, FutureExt};

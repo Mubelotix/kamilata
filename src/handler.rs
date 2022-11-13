@@ -28,7 +28,7 @@ pub enum KamTaskOutput {
     SetOutboundRefreshTask(Task)
 }
 
-async fn broadcast_local_filters(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn broadcast_local_filters<D: Document>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Outbound refresh task executing");
     
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
@@ -41,7 +41,7 @@ async fn broadcast_local_filters(mut stream: KamInStreamSink<NegotiatedSubstream
     peers_to_ignore.push(remote_peer_id);
 
     loop {
-        let local_filters = filter_db.read().await.gen_local_filters(&peers_to_ignore);
+        let local_filters = db.gen_local_filters(&peers_to_ignore).await;
         stream.start_send_unpin(ResponsePacket::UpdateFilters(UpdateFiltersPacket { filters: local_filters })).unwrap();
         stream.flush().await.unwrap();
 
@@ -49,7 +49,7 @@ async fn broadcast_local_filters(mut stream: KamInStreamSink<NegotiatedSubstream
     }
 }
 
-async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn handle_request<D: Document>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Handling a request");
 
     let request = stream.next().await.unwrap().unwrap();
@@ -65,7 +65,7 @@ async fn handle_request(mut stream: KamInStreamSink<NegotiatedSubstream>, filter
     }
 }
 
-async fn receive_remote_filters(mut stream: KamOutStreamSink<NegotiatedSubstream>, filter_db: Arc<RwLock<FilterDb>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Inbound refresh task executing");
 
     // Send our refresh request
@@ -100,26 +100,26 @@ async fn receive_remote_filters(mut stream: KamOutStreamSink<NegotiatedSubstream
             _ => return KamTaskOutput::None,
         };
         // TODO check packet.filters lenght and count and time between received
-        filter_db.write().await.set(remote_peer_id, packet.filters);
+        db.set(remote_peer_id, packet.filters).await;
     }
 }
 
-fn receive_remote_filters_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
-    let vals: Box<(Arc<RwLock<FilterDb>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
+fn receive_remote_filters_boxed<D: Document>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    let vals: Box<(Arc<Db<D>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     receive_remote_filters(stream, vals.0, vals.1, vals.2).boxed()
 }
 
-fn pending_receive_remote_filters(filters: Arc<RwLock<FilterDb>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
+fn pending_receive_remote_filters<D: Document>(filters: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
         params: Box::new((filters, our_peer_id, remote_peer_id)),
-        fut: receive_remote_filters_boxed
+        fut: receive_remote_filters_boxed::<D>
     }
 }
 
-pub struct KamilataHandler {
+pub struct KamilataHandler<D: Document> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-    filter_db: Arc<RwLock<FilterDb>>,
+    db: Arc<Db<D>>,
 
     first_poll: bool,
     rt_handle: tokio::runtime::Handle,
@@ -131,13 +131,13 @@ pub struct KamilataHandler {
     tasks: HashMap<u32, Task>,
 }
 
-impl KamilataHandler {
-    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, filter_db: Arc<RwLock<FilterDb>>) -> Self {
+impl<D: Document> KamilataHandler<D> {
+    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
         KamilataHandler {
             our_peer_id,
             remote_peer_id,
-            filter_db,
+            db,
 
             first_poll: true,
             rt_handle,
@@ -147,7 +147,7 @@ impl KamilataHandler {
     }
 }
 
-impl ConnectionHandler for KamilataHandler {
+impl<D: Document> ConnectionHandler for KamilataHandler<D> {
     type InEvent = KamilataHandlerIn;
     type OutEvent = KamilataHandlerEvent;
     type Error = ioError;
@@ -172,7 +172,7 @@ impl ConnectionHandler for KamilataHandler {
         };
 
         // TODO: prevent DoS
-        let task = handle_request(substream, Arc::clone(&self.filter_db), self.our_peer_id, self.remote_peer_id).boxed();
+        let task = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
         self.tasks.insert(self.task_counter.next(), task);
     }
 
@@ -223,7 +223,7 @@ impl ConnectionHandler for KamilataHandler {
         if self.first_poll {
             self.first_poll = false;
 
-            let pending_task = pending_receive_remote_filters(Arc::clone(&self.filter_db), self.our_peer_id, self.remote_peer_id);
+            let pending_task = pending_receive_remote_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
             println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
             // TODO it is assumed that it cannot fail. Is this correct?
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
