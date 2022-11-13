@@ -65,12 +65,12 @@ pub fn hash_word(word: &str) -> usize {
     result % (125000 * 8)
 }
 
-struct BookResult {
+struct MovieResult {
     cid: String,
-    excerpt: String,
+    desc: String,
 }
 
-impl SearchResult for BookResult {
+impl SearchResult for MovieResult {
     type Cid = String;
 
     fn cid(&self) -> &Self::Cid {
@@ -81,8 +81,8 @@ impl SearchResult for BookResult {
         let mut data = Vec::new();
         data.extend_from_slice(&self.cid.len().to_be_bytes());
         data.extend_from_slice(self.cid.as_bytes());
-        data.extend_from_slice(&self.excerpt.len().to_be_bytes());
-        data.extend_from_slice(self.excerpt.as_bytes());
+        data.extend_from_slice(&self.desc.len().to_be_bytes());
+        data.extend_from_slice(self.desc.as_bytes());
         data
     }
 
@@ -97,27 +97,27 @@ impl SearchResult for BookResult {
         let excerpt = String::from_utf8(bytes[..excerpt_len].to_vec()).unwrap();
         bytes = &bytes[excerpt_len..];
         assert!(bytes.is_empty());
-        BookResult {
+        MovieResult {
             cid,
-            excerpt,
+            desc: excerpt,
         }
     }
 }
 
-struct Book {
+struct Movie {
     cid: String,
-    text: String,
+    desc: String,
 }
 
-impl Document for Book {
-    type SearchResult = BookResult;
+impl Document for Movie {
+    type SearchResult = MovieResult;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
         &self.cid
     }
 
     fn apply_to_filter(&self, filter: &mut Filter<125000>) {
-        self.text.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
+        self.desc.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
             let hash = hash_word(word);
             filter.set_bit(hash, true);
         });
@@ -127,7 +127,7 @@ impl Document for Book {
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<Book>>,
+    swarm: Swarm<KamilataBehavior<Movie>>,
     addr: Multiaddr,
 }
 
@@ -181,6 +181,29 @@ impl Client {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let client1 = Client::init(1000).await;
+    client1.swarm.behaviour().insert_documents(vec![
+        Movie {
+            cid: "V for Vendetta".to_string(),
+            desc: "In a future British dystopian society, a shadowy freedom fighter, known only by the alias of \"V\", plots to overthrow the tyrannical government - with the help of a young woman.".to_string(),
+        },
+        Movie {
+            cid: "The Matrix".to_string(),
+            desc: "When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.".to_string(),
+        },
+        Movie {
+            cid: "Revolution of Our Times".to_string(),
+            desc: "Due to political restrictions in Hong Kong, this documentary following protestors since 2019, is broken into pieces, each containing interviews and historical context of the conflict.".to_string(),
+        },
+        Movie {
+            cid: "The Social Dilemma".to_string(),
+            desc: "Explores the dangerous human impact of social networking, with tech experts sounding the alarm on their own creations.".to_string(),
+        },
+        Movie {
+            cid: "The Hunger Games".to_string(),
+            desc: "Katniss Everdeen voluntarily takes her younger sister's place in the Hunger Games: a televised competition in which two teenagers from each of the twelve Districts of Panem are chosen at random to fight to the death.".to_string(),
+        }
+    ]).await;
+
     let addr = client1.addr.clone();
     let h1 = tokio::spawn(client1.run());
 
