@@ -100,7 +100,7 @@ async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<Negoti
             _ => return KamTaskOutput::None,
         };
         // TODO check packet.filters lenght and count and time between received
-        db.set(remote_peer_id, packet.filters).await;
+        db.set_remote_filter(remote_peer_id, packet.filters).await;
     }
 }
 
