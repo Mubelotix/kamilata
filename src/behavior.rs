@@ -43,4 +43,24 @@ impl<D: Document> KamilataBehavior<D> {
             db: Arc::new(Db::new())
         }
     }
+
+    pub async fn insert_document(&self, document: D) {
+        self.db.insert_document(document).await;
+    }
+
+    pub async fn insert_documents(&self, documents: Vec<D>) {
+        self.db.insert_documents(documents).await;
+    }
+
+    pub async fn clear_documents(&self) {
+        self.db.clear_documents().await;
+    }
+
+    pub async fn remove_document(&self, cid: &<D::SearchResult as SearchResult>::Cid) {
+        self.db.remove_document(cid).await;
+    }
+
+    pub async fn remove_documents(&self, cids: &[&<D::SearchResult as SearchResult>::Cid]) {
+        self.db.remove_documents(cids).await;
+    }
 }
