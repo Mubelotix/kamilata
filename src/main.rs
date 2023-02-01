@@ -135,7 +135,7 @@ impl Client {
     pub async fn init(n: usize) -> Self {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
-        println!("Local peer id: {:?}", local_peer_id);
+        println!("Local peer id: {local_peer_id:?}");
     
         let transport = memory_transport(local_key.clone()).await.expect("Failed to build transport");
 
@@ -163,15 +163,15 @@ impl Client {
     }
 
     fn dial(&mut self, addr: Multiaddr) {
-        println!("Dialing {:?}", addr);
+        println!("Dialing {addr:?}");
         self.swarm.dial(addr).unwrap();
     }
 
     async fn run(mut self) {
         loop {
             match self.swarm.select_next_some().await {
-                SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {:?}", address),
-                SwarmEvent::Behaviour(event) => println!("{:?}", event),
+                SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
+                SwarmEvent::Behaviour(event) => println!("{event:?}"),
                 _ => {}
             }
         }
