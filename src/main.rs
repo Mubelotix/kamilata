@@ -92,14 +92,14 @@ impl SearchResult for MovieResult {
         bytes = &bytes[4..];
         let cid = String::from_utf8(bytes[..cid_len].to_vec()).unwrap();
         bytes = &bytes[cid_len..];
-        let excerpt_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
+        let desc_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
         bytes = &bytes[4..];
-        let excerpt = String::from_utf8(bytes[..excerpt_len].to_vec()).unwrap();
-        bytes = &bytes[excerpt_len..];
+        let desc = String::from_utf8(bytes[..desc_len].to_vec()).unwrap();
+        bytes = &bytes[desc_len..];
         assert!(bytes.is_empty());
         MovieResult {
             cid,
-            desc: excerpt,
+            desc,
         }
     }
 }
