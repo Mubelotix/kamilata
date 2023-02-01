@@ -115,6 +115,7 @@ struct Movie<const N: usize> {
 
 impl<const N: usize> Document<N> for Movie<N> {
     type SearchResult = MovieResult;
+    type WordHasher = WordHasherImpl<N>;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
         &self.cid
@@ -122,7 +123,7 @@ impl<const N: usize> Document<N> for Movie<N> {
 
     fn apply_to_filter(&self, filter: &mut Filter<N>) {
         self.desc.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
-            let hash = WordHasherImpl::<N>::hash_word(word);
+            let hash = Self::WordHasher::hash_word(word);
             filter.set_bit(hash, true);
         });
     }

@@ -11,6 +11,7 @@ pub trait SearchResult: Send + Sync + 'static {
 
 pub trait Document<const N: usize>: Send + Sync + 'static {
     type SearchResult: SearchResult;
+    type WordHasher: WordHasher<N>;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid;
     // TODO: this should be async
