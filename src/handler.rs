@@ -44,8 +44,9 @@ async fn broadcast_local_filters<D: Document>(mut stream: KamInStreamSink<Negoti
         let local_filters = db.gen_local_filters(&peers_to_ignore).await;
         stream.start_send_unpin(ResponsePacket::UpdateFilters(UpdateFiltersPacket { filters: local_filters })).unwrap();
         stream.flush().await.unwrap();
+        println!("{our_peer_id} Sent filters to {remote_peer_id}");
 
-        sleep(Duration::from_millis(refresh_packet.interval as u64)).await;
+        sleep(Duration::from_millis(refresh_packet.interval)).await;
     }
 }
 
@@ -77,7 +78,10 @@ async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<Negoti
     let response = stream.next().await.unwrap().unwrap();
     let refresh_packet = match response {
         ResponsePacket::ConfirmRefresh(refresh_packet) => refresh_packet,
-        _ => return KamTaskOutput::None,
+        _ => {
+            println!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for refresh confirmation packet");
+            return KamTaskOutput::None;
+        },
     };
 
     // Check response
@@ -97,10 +101,15 @@ async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<Negoti
         let packet = stream.next().await.unwrap().unwrap();
         let packet = match packet {
             ResponsePacket::UpdateFilters(packet) => packet,
-            _ => return KamTaskOutput::None,
+            _ => {
+                println!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for filters");
+                return KamTaskOutput::None;
+            },
         };
         // TODO check packet.filters lenght and count and time between received
+        let load = packet.filters.first().map(|f| f.load()).unwrap_or(0.0);
         db.set_remote_filter(remote_peer_id, packet.filters).await;
+        println!("{our_peer_id} Received filters from {remote_peer_id} (load: {load})");
     }
 }
 
@@ -182,6 +191,7 @@ impl<D: Document> ConnectionHandler for KamilataHandler<D> {
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
         pending_task: Self::OutboundOpenInfo,
     ) {
+        println!("{} Established outbound channel with {}", self.our_peer_id, self.remote_peer_id);
         let task = (pending_task.fut)(substream, pending_task.params);
         self.tasks.insert(self.task_counter.next(), task);
     }
@@ -241,8 +251,9 @@ impl<D: Document> ConnectionHandler for KamilataHandler<D> {
                     self.tasks.remove(&tid);
 
                     match output {
-                        KamTaskOutput::SetOutboundRefreshTask(outbound_refresh_task) => {
+                        KamTaskOutput::SetOutboundRefreshTask(mut outbound_refresh_task) => {
                             println!("{} outbound refresh task set", self.our_peer_id);
+                            outbound_refresh_task.poll_unpin(cx); // TODO should be used
                             self.tasks.insert(0, outbound_refresh_task);
                         },
                         KamTaskOutput::Disconnect(disconnect_packet) => {
