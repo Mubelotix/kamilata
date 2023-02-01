@@ -53,16 +53,20 @@ pub async fn memory_transport(
         .boxed())
 }
 
-pub fn hash_word(word: &str) -> usize {
-    let mut result = 1usize;
-    const RANDOM_SEED: [usize; 16] = [542587211452, 5242354514, 245421154, 4534542154, 542866467, 545245414, 7867569786914, 88797854597, 24542187316, 645785447, 434963879, 4234274, 55418648642, 69454242114688, 74539841, 454214578213];
-    for c in word.bytes() {
-        for i in 0..8 {
-            result = result.overflowing_mul(c as usize + RANDOM_SEED[i*2]).0;
-            result = result.overflowing_add(c as usize + RANDOM_SEED[i*2+1]).0;
+struct WordHasherImpl<const N: usize>;
+
+impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
+    fn hash_word(word: &str) -> usize {
+        let mut result = 1usize;
+        const RANDOM_SEED: [usize; 16] = [542587211452, 5242354514, 245421154, 4534542154, 542866467, 545245414, 7867569786914, 88797854597, 24542187316, 645785447, 434963879, 4234274, 55418648642, 69454242114688, 74539841, 454214578213];
+        for c in word.bytes() {
+            for i in 0..8 {
+                result = result.overflowing_mul(c as usize + RANDOM_SEED[i*2]).0;
+                result = result.overflowing_add(c as usize + RANDOM_SEED[i*2+1]).0;
+            }
         }
+        result % (N * 8)
     }
-    result % (125000 * 8)
 }
 
 struct MovieResult {
@@ -104,21 +108,21 @@ impl SearchResult for MovieResult {
     }
 }
 
-struct Movie {
+struct Movie<const N: usize> {
     cid: String,
     desc: String,
 }
 
-impl Document for Movie {
+impl<const N: usize> Document<N> for Movie<N> {
     type SearchResult = MovieResult;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
         &self.cid
     }
 
-    fn apply_to_filter(&self, filter: &mut Filter<125000>) {
+    fn apply_to_filter(&self, filter: &mut Filter<N>) {
         self.desc.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
-            let hash = hash_word(word);
+            let hash = WordHasherImpl::<N>::hash_word(word);
             filter.set_bit(hash, true);
         });
     }
@@ -127,7 +131,7 @@ impl Document for Movie {
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<Movie>>,
+    swarm: Swarm<KamilataBehavior<125000, Movie<125000>>>,
     addr: Multiaddr,
 }
 

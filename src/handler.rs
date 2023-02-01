@@ -28,7 +28,7 @@ pub enum KamTaskOutput {
     SetOutboundRefreshTask(Task)
 }
 
-async fn broadcast_local_filters<D: Document>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn broadcast_local_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Outbound refresh task executing");
     
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
@@ -42,6 +42,7 @@ async fn broadcast_local_filters<D: Document>(mut stream: KamInStreamSink<Negoti
 
     loop {
         let local_filters = db.gen_local_filters(&peers_to_ignore).await;
+        let local_filters = local_filters.iter().map(|f| f.into()).collect::<Vec<Vec<u8>>>();
         stream.start_send_unpin(ResponsePacket::UpdateFilters(UpdateFiltersPacket { filters: local_filters })).unwrap();
         stream.flush().await.unwrap();
         println!("{our_peer_id} Sent filters to {remote_peer_id}");
@@ -50,7 +51,7 @@ async fn broadcast_local_filters<D: Document>(mut stream: KamInStreamSink<Negoti
     }
 }
 
-async fn handle_request<D: Document>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Handling a request");
 
     let request = stream.next().await.unwrap().unwrap();
@@ -61,12 +62,14 @@ async fn handle_request<D: Document>(mut stream: KamInStreamSink<NegotiatedSubst
             let task = broadcast_local_filters(stream, refresh_packet, filter_db, our_peer_id, remote_peer_id);
             KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
-        RequestPacket::Search(_) => todo!(),
+        RequestPacket::Search(search_packet) => {
+            todo!()
+        },
         RequestPacket::Disconnect(_) => todo!(),
     }
 }
 
-async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
+async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> KamTaskOutput {
     println!("{our_peer_id} Inbound refresh task executing");
 
     // Send our refresh request
@@ -107,28 +110,29 @@ async fn receive_remote_filters<D: Document>(mut stream: KamOutStreamSink<Negoti
             },
         };
         // TODO check packet.filters lenght and count and time between received
-        let load = packet.filters.first().map(|f| f.load()).unwrap_or(0.0);
-        db.set_remote_filter(remote_peer_id, packet.filters).await;
+        let filters = packet.filters.iter().map(|f| f.as_slice().into()).collect::<Vec<Filter<N>>>();
+        let load = filters.first().map(|f| f.load()).unwrap_or(0.0);
+        db.set_remote_filter(remote_peer_id, filters).await;
         println!("{our_peer_id} Received filters from {remote_peer_id} (load: {load})");
     }
 }
 
-fn receive_remote_filters_boxed<D: Document>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
-    let vals: Box<(Arc<Db<D>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
+fn receive_remote_filters_boxed<const N: usize, D: Document<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = KamTaskOutput> + Send>> {
+    let vals: Box<(Arc<Db<N, D>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     receive_remote_filters(stream, vals.0, vals.1, vals.2).boxed()
 }
 
-fn pending_receive_remote_filters<D: Document>(filters: Arc<Db<D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
+fn pending_receive_remote_filters<const N: usize, D: Document<N>>(filters: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingTask<Box<dyn std::any::Any + Send>> {
     PendingTask {
         params: Box::new((filters, our_peer_id, remote_peer_id)),
-        fut: receive_remote_filters_boxed::<D>
+        fut: receive_remote_filters_boxed::<N, D>
     }
 }
 
-pub struct KamilataHandler<D: Document> {
+pub struct KamilataHandler<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-    db: Arc<Db<D>>,
+    db: Arc<Db<N, D>>,
 
     first_poll: bool,
     rt_handle: tokio::runtime::Handle,
@@ -140,8 +144,8 @@ pub struct KamilataHandler<D: Document> {
     tasks: HashMap<u32, Task>,
 }
 
-impl<D: Document> KamilataHandler<D> {
-    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<D>>) -> Self {
+impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
+    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
         KamilataHandler {
             our_peer_id,
@@ -156,7 +160,7 @@ impl<D: Document> KamilataHandler<D> {
     }
 }
 
-impl<D: Document> ConnectionHandler for KamilataHandler<D> {
+impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D> {
     type InEvent = KamilataHandlerIn;
     type OutEvent = KamilataHandlerEvent;
     type Error = ioError;

@@ -91,22 +91,22 @@ impl<const N: usize> std::ops::BitOrAssign for Filter<N> {
     }
 }
 
-impl<const N: usize> protocol::Parcel for Filter<N> {
-    const TYPE_NAME: &'static str = "Filter";
-
-    fn read_field(read: &mut dyn std::io::Read,
-                  settings: &protocol::Settings,
-                  hints: &mut protocol::hint::Hints) -> Result<Self, protocol::Error> {
-        let mut bytes = [0; N];
-        read.read_exact(&mut bytes)?;
-        Ok(Filter(Box::new(bytes)))
+impl<const N: usize> From<&[u8]> for Filter<N> {
+    fn from(bytes: &[u8]) -> Self {
+        let mut filter = Filter::new();
+        for byte_idx in 0..N {
+            // TODO check that bytes.len() == N
+            unsafe {
+                *filter.0.get_unchecked_mut(byte_idx) = *bytes.get_unchecked(byte_idx);
+            }
+        }
+        filter
     }
+}
 
-    fn write_field(&self, write: &mut dyn std::io::Write,
-             settings: &protocol::Settings,
-             hints: &mut protocol::hint::Hints) -> Result<(), protocol::Error> {
-        write.write_all(self.0.as_slice())?;
-        Ok(())
+impl<const N: usize> From<&Filter<N>> for Vec<u8> {
+    fn from(filter: &Filter<N>) -> Self {
+        filter.0.to_vec()
     }
 }
 

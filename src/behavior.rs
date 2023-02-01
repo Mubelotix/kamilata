@@ -5,13 +5,13 @@ pub enum KamilataEvent {
 
 }
 
-pub struct KamilataBehavior<D: Document> {
+pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
-    db: Arc<Db<D>>
+    db: Arc<Db<N, D>>
 }
 
-impl<D: Document> NetworkBehaviour for KamilataBehavior<D> {
-    type ConnectionHandler = KamilataHandlerProto<D>;
+impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D> {
+    type ConnectionHandler = KamilataHandlerProto<N, D>;
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
@@ -36,8 +36,8 @@ impl<D: Document> NetworkBehaviour for KamilataBehavior<D> {
     }
 }
 
-impl<D: Document> KamilataBehavior<D> {
-    pub fn new(our_peer_id: PeerId) -> KamilataBehavior<D> {
+impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
+    pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, D> {
         KamilataBehavior {
             our_peer_id,
             db: Arc::new(Db::new())

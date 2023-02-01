@@ -89,9 +89,22 @@ impl Default for RefreshPacket {
     }
 }
 
+/// For a filter to match a query, it must have at least `match_count` bits set to 1 at the positions specified by hashed `words`.
+#[derive(Protocol, Debug, Clone)]
+pub struct Query {
+    /// List of words to search for.
+    pub words: Vec<String>,
+    /// Minimum number of words that must match in order for a filter to match the query.
+    /// Invalid if greater than `words.len()`.
+    pub match_count: u16,
+}
+
 #[derive(Protocol, Debug, Clone)]
 pub struct SearchPacket {
-    query: String,
+    /// A list of queries.
+    /// When multiple queries are sent, all of them should be replied to.
+    /// If not possible, the responder should reply with as many as possible, starting with the first.
+    pub queries: Vec<Query>,
 }
 
 #[derive(Protocol, Debug, Clone)]
@@ -112,13 +125,31 @@ pub enum ResponsePacket {
 #[derive(Protocol, Debug, Clone)]
 pub struct UpdateFiltersPacket {
     /// The filters ordered from distance 0 to the furthest at a distance of [RefreshPacket::range].
-    pub filters: Vec<Filter<125000>>,
+    pub filters: Vec<Vec<u8>>,
+}
+
+#[derive(Protocol, Debug, Clone)]
+pub struct QueryDistantMatch {
+    /// The first (thus best) query this result matched at a distance of the corresponding index.
+    /// At least one of the items in this list should be `Some`.
+    pub queries: Vec<Option<u16>>,
+    pub peer_id: PeerId,
+}
+
+#[derive(Protocol, Debug, Clone)]
+pub struct QueryLocalMatch {
+    /// The first (thus best) query this result matched.
+    pub query: u16,
+    /// The result to be deserialized and used.
+    pub result: Vec<u8>,
 }
 
 #[derive(Protocol, Debug, Clone)]
 pub struct ResultsPacket {
-    peers: Vec<(PeerId, Vec<u64>)>,
-    results: Vec<String>,
+    /// A list of routing information to be used to find actual results.
+    pub routes: Vec<QueryDistantMatch>,
+    /// Contains a list of [SearchResult]s to be deserialized and used.
+    pub matches: Vec<QueryLocalMatch>,
 }
 
 #[derive(Protocol, Debug, Clone)]

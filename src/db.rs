@@ -1,16 +1,16 @@
 use std::ops::DerefMut;
 use crate::prelude::*;
 
-pub struct Db<D: Document> {
+pub struct Db<const N: usize, D: Document<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
-    filters: RwLock<BTreeMap<PeerId, Vec<Filter<125000>>>>,
-    our_root_filter: RwLock<Filter<125000>>,
+    filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
+    our_root_filter: RwLock<Filter<N>>,
 }
 
-impl<D: Document> Db<D> {
-    pub fn new() -> Db<D> {
+impl<const N: usize, D: Document<N>> Db<N, D> {
+    pub fn new() -> Db<N, D> {
         Db {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
@@ -75,12 +75,12 @@ impl<D: Document> Db<D> {
         }
     }
 
-    pub async fn set_remote_filter(&self, peer_id: PeerId, filters: Vec<Filter<125000>>) {
+    pub async fn set_remote_filter(&self, peer_id: PeerId, filters: Vec<Filter<N>>) {
         // TODO size checks
         self.filters.write().await.insert(peer_id, filters);
     }
 
-    pub async fn gen_local_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<125000>> {
+    pub async fn gen_local_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<N>> {
         let mut local_filters = Vec::new();
         local_filters.push(self.our_root_filter.read().await.clone());
 

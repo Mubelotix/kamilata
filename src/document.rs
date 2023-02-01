@@ -9,10 +9,14 @@ pub trait SearchResult: Send + Sync + 'static {
     fn from_bytes(bytes: &[u8]) -> Self;
 }
 
-pub trait Document: Send + Sync + 'static {
+pub trait Document<const N: usize>: Send + Sync + 'static {
     type SearchResult: SearchResult;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid;
     // TODO: this should be async
-    fn apply_to_filter(&self, filter: &mut Filter<125000>);
+    fn apply_to_filter(&self, filter: &mut Filter<N>);
+}
+
+pub trait WordHasher<const N: usize> {
+    fn hash_word(word: &str) -> usize;
 }
