@@ -19,7 +19,7 @@ pub use libp2p::{
         NetworkBehaviour, NetworkBehaviourAction, PollParameters, SubstreamProtocol, Swarm,
         SwarmEvent,
     },
-    InboundUpgrade, Multiaddr, NetworkBehaviour, OutboundUpgrade, PeerId, Transport,
+    InboundUpgrade, Multiaddr, OutboundUpgrade, PeerId, Transport,
 };
 pub use std::{
     collections::BTreeMap,
