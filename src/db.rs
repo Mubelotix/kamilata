@@ -109,4 +109,40 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
 
         local_filters
     }
+
+    /// Returns peers and their distance to each query.
+    /// The distance from node `n` for query `i` can be found at index `i` in the array associated with `n`.
+    pub async fn search_remote(&self, hashed_queries: &Vec<(Vec<usize>, usize)>) -> Vec<(PeerId, Vec<Option<usize>>)> {
+        let filters = self.filters.read().await;
+        filters
+            .iter()
+            .map(|(peer_id, filters)| {
+                let mut matches = Vec::new();
+                for (query_id, (hashed_words, min_matching)) in hashed_queries.iter().enumerate() {
+                    let mut best_distance = None;
+                    for (distance, filter) in filters.iter().enumerate() {
+                        if hashed_words.iter().filter(|w| filter.get_bit(**w)).count() >= *min_matching {
+                            best_distance = Some(distance);
+                            break;
+                        }
+                    }
+                    matches.push(best_distance)
+                }
+                (*peer_id, matches)
+            })
+            .filter(|(_,m)| !m.is_empty())
+            .collect()
+    }
+
+    pub async fn search_local(&self, queries: &Vec<(Vec<String>, usize)>) -> Vec<(D::SearchResult, usize)> {
+        let documents = self.documents.read().await;
+        documents.values().filter_map(|document| {
+            for (query_id, (words, min_matching)) in queries.iter().enumerate() {
+                if let Some(search_result) = document.search_result(words, *min_matching) {
+                    return Some((search_result, query_id));
+                }
+            }
+            None
+        }).collect()
+    }
 }

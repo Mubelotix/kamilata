@@ -16,6 +16,7 @@ pub trait Document<const N: usize>: Send + Sync + 'static {
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid;
     // TODO: this should be async
     fn apply_to_filter(&self, filter: &mut Filter<N>);
+    fn search_result(&self, words: &[String], min_matching: usize) -> Option<Self::SearchResult>;
 }
 
 pub trait WordHasher<const N: usize> {

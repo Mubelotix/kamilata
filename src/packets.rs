@@ -7,6 +7,12 @@ use crate::prelude::*;
 #[repr(transparent)]
 pub struct PeerId(libp2p::PeerId);
 
+impl From<libp2p::PeerId> for PeerId {
+    fn from(peer_id: libp2p::PeerId) -> Self {
+        PeerId(peer_id)
+    }
+}
+
 impl protocol::Parcel for PeerId {
     const TYPE_NAME: &'static str = "PeerId";
 
@@ -96,7 +102,7 @@ pub struct Query {
     pub words: Vec<String>,
     /// Minimum number of words that must match in order for a filter to match the query.
     /// Invalid if greater than `words.len()`.
-    pub match_count: u16,
+    pub min_matching: u16,
 }
 
 #[derive(Protocol, Debug, Clone)]
@@ -129,7 +135,7 @@ pub struct UpdateFiltersPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct QueryDistantMatch {
+pub struct RemoteMatch {
     /// The first (thus best) query this result matched at a distance of the corresponding index.
     /// At least one of the items in this list should be `Some`.
     pub queries: Vec<Option<u16>>,
@@ -137,7 +143,7 @@ pub struct QueryDistantMatch {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct QueryLocalMatch {
+pub struct LocalMatch {
     /// The first (thus best) query this result matched.
     pub query: u16,
     /// The result to be deserialized and used.
@@ -147,9 +153,9 @@ pub struct QueryLocalMatch {
 #[derive(Protocol, Debug, Clone)]
 pub struct ResultsPacket {
     /// A list of routing information to be used to find actual results.
-    pub routes: Vec<QueryDistantMatch>,
+    pub routes: Vec<RemoteMatch>,
     /// Contains a list of [SearchResult]s to be deserialized and used.
-    pub matches: Vec<QueryLocalMatch>,
+    pub matches: Vec<LocalMatch>,
 }
 
 #[derive(Protocol, Debug, Clone)]

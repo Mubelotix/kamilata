@@ -1,6 +1,6 @@
 use futures::future::BoxFuture;
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
-use std::{time::Instant, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::prelude::*;
 
@@ -63,7 +63,36 @@ async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamS
             KamTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::Search(search_packet) => {
-            todo!()
+            println!("{our_peer_id} It's a search");
+            let hashed_queries = search_packet.queries
+                .iter()
+                .map(|q| (q.words.iter().map(|w| D::WordHasher::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))
+                .collect::<Vec<_>>();
+            let remote_matches = filter_db.search_remote(&hashed_queries).await;
+
+            let queries = search_packet.queries
+                .iter()
+                .map(|q| (q.words.to_owned(), q.min_matching as usize))
+                .collect::<Vec<_>>();
+            let local_matches = filter_db.search_local(&queries).await;
+
+            stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
+                routes: remote_matches.into_iter().map(|(peer_id, distances)| {
+                    RemoteMatch {
+                        queries: distances.into_iter().map(|d| d.map(|d| d as u16)).collect(),
+                        peer_id: peer_id.into(),
+                    }
+                }).collect(),
+                matches: local_matches.into_iter().map(|(result, query_id)| {
+                    LocalMatch {
+                        query: query_id as u16,
+                        result: result.into_bytes(),
+                    }
+                }).collect()
+            })).unwrap();
+            stream.flush().await.unwrap();
+
+            KamTaskOutput::None
         },
         RequestPacket::Disconnect(_) => todo!(),
     }

@@ -127,6 +127,23 @@ impl<const N: usize> Document<N> for Movie<N> {
             filter.set_bit(hash, true);
         });
     }
+
+    fn search_result(&self, words: &[String], min_matching: usize) -> Option<Self::SearchResult> {
+        let mut matching = 0;
+        for word in words {
+            if self.desc.contains(word) {
+                matching += 1;
+            }
+        }
+        if matching >= min_matching {
+            Some(MovieResult {
+                cid: self.cid.clone(),
+                desc: self.desc.clone(),
+            })
+        } else {
+            None
+        }
+    }
 }
 
 pub struct Client {
