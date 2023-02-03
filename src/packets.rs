@@ -1,7 +1,4 @@
 use protocol_derive::Protocol;
-use crate::prelude::*;
-
-// TODO everything pub crate
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -42,17 +39,11 @@ impl std::fmt::Debug for PeerId {
     }
 }
 
-impl PeerId {
-    fn as_libp2p_peer_id(self) -> libp2p::PeerId {
-        self.0
-    }
-}
-
 pub trait HackTraitVecPeerId {
-    fn as_libp2p_peer_ids(self) -> Vec<libp2p::PeerId>;
+    fn to_libp2p_peer_ids(self) -> Vec<libp2p::PeerId>;
 }
 impl HackTraitVecPeerId for Vec<PeerId> {
-    fn as_libp2p_peer_ids(self) -> Vec<libp2p::PeerId> {
+    fn to_libp2p_peer_ids(self) -> Vec<libp2p::PeerId> {
         unsafe {
             std::mem::transmute_copy(&self)
         }

@@ -2,12 +2,12 @@
 use crate::prelude::*;
 
 #[derive(Debug)]
-pub enum KamilataHandlerIn {
+pub enum HandlerInEvent {
 
 }
 
 #[derive(Debug)]
-pub enum KamilataHandlerEvent {
+pub enum HandlerOutEvent {
 
 }
 
@@ -43,8 +43,8 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
 }
 
 impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D> {
-    type InEvent = KamilataHandlerIn;
-    type OutEvent = KamilataHandlerEvent;
+    type InEvent = HandlerInEvent;
+    type OutEvent = HandlerOutEvent;
     type Error = ioError;
     type InboundProtocol = EitherUpgrade<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;

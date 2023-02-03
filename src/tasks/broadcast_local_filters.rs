@@ -9,7 +9,7 @@ pub async fn broadcast_local_filters<const N: usize, D: Document<N>>(mut stream:
     stream.start_send_unpin(ResponsePacket::ConfirmRefresh(refresh_packet.clone())).unwrap();
     stream.flush().await.unwrap();
 
-    let mut peers_to_ignore = refresh_packet.blocked_peers.as_libp2p_peer_ids();
+    let mut peers_to_ignore = refresh_packet.blocked_peers.to_libp2p_peer_ids();
     peers_to_ignore.push(remote_peer_id);
 
     loop {

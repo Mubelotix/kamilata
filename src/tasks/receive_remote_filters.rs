@@ -19,8 +19,8 @@ pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: 
     };
 
     // Check response
-    let blocked_peers = refresh_packet.blocked_peers.as_libp2p_peer_ids();
-    let demanded_blocked_peers = demanded_refresh_packet.blocked_peers.as_libp2p_peer_ids();
+    let blocked_peers = refresh_packet.blocked_peers.to_libp2p_peer_ids();
+    let demanded_blocked_peers = demanded_refresh_packet.blocked_peers.to_libp2p_peer_ids();
     for blocked_peer in blocked_peers {
         if !demanded_blocked_peers.contains(&blocked_peer) {
             return HandlerTaskOutput::Disconnect(DisconnectPacket {

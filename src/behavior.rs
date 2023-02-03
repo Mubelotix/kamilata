@@ -7,12 +7,12 @@ pub enum KamilataEvent {
 
 /// A struct that allows to send messages to an [handler](ConnectionHandler)
 pub struct HandlerMessager {
-    sender: Sender<(PeerId, KamilataHandlerIn)>,
+    sender: Sender<(PeerId, HandlerInEvent)>,
 }
 
 impl HandlerMessager {
     /// Sends a message to the handler.
-    pub async fn message(&self, peer_id: PeerId, message: KamilataHandlerIn) {
+    pub async fn message(&self, peer_id: PeerId, message: HandlerInEvent) {
         self.sender.send((peer_id, message)).await.unwrap();
     }
 }
@@ -20,8 +20,8 @@ impl HandlerMessager {
 pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     db: Arc<Db<N, D>>,
-    handler_event_sender: Sender<(PeerId, KamilataHandlerIn)>,
-    handler_event_receiver: Receiver<(PeerId, KamilataHandlerIn)>,
+    handler_event_sender: Sender<(PeerId, HandlerInEvent)>,
+    handler_event_receiver: Receiver<(PeerId, HandlerInEvent)>,
     
     rt_handle: tokio::runtime::Handle,
 
@@ -68,10 +68,6 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         self.db.remove_documents(cids).await;
     }
 
-    async fn message_handler(&mut self, peer_id: PeerId, message: KamilataHandlerIn) {
-        self.handler_event_sender.send((peer_id, message)).await.unwrap();
-    }
-
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
     pub async fn search(&mut self, words: Vec<String>) -> OngoingSearchControler<D::SearchResult> {
         let handler_messager = HandlerMessager {
@@ -96,7 +92,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         &mut self,
         peer_id: PeerId,
         connection: ConnectionId,
-        event: KamilataHandlerEvent,
+        event: HandlerOutEvent,
     ) {
         todo!()
     }
