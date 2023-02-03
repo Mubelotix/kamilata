@@ -5,13 +5,7 @@ pub enum KamilataEvent {
 
 }
 
-type HandlerTask = BoxFuture<'static, KamHandlerTaskOutput>;
-
-pub enum KamHandlerTaskOutput {
-    None,
-}
-
-/// A struct that allows to send messages to an handler.
+/// A struct that allows to send messages to an [handler](ConnectionHandler)
 pub struct HandlerMessager {
     sender: Sender<(PeerId, KamilataHandlerIn)>,
 }
@@ -35,7 +29,7 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
     ///     none
-    tasks: HashMap<usize, HandlerTask>,
+    tasks: HashMap<usize, Task>,
 }
 
 impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
@@ -135,7 +129,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     self.tasks.remove(&tid);
 
                     match output {
-                        KamHandlerTaskOutput::None => (),
+                        TaskOutput::None => (),
                     }
                 }
                 Poll::Pending => ()
