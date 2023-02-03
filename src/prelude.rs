@@ -1,7 +1,8 @@
 pub use crate::{
-    behavior::*, config::*, counter::*, document::*, db::*, filters::*, handler::*,
-    handler_proto::*, packets::*,
+    behavior::*, config::*, control::*, counter::*, db::*, document::*, filters::*, handler::*,
+    handler_proto::*, packets::*, search::*,
 };
+pub use futures::future::BoxFuture;
 pub use futures::{future::join, prelude::*, FutureExt};
 pub use libp2p::{
     core::{
@@ -23,12 +24,17 @@ pub use libp2p::{
 };
 pub use std::{
     collections::BTreeMap,
+    collections::HashMap,
     error::Error,
     io::Error as ioError,
     iter,
     pin::Pin,
     sync::Arc,
+    task::Waker,
     task::{Context, Poll},
     time::Duration,
 };
-pub use tokio::{sync::RwLock, time::sleep};
+pub use tokio::{
+    sync::{mpsc::*, RwLock},
+    time::sleep,
+};

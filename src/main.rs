@@ -31,6 +31,8 @@ mod config;
 mod handler_proto;
 mod db;
 mod document;
+mod control;
+mod search;
 use prelude::*;
 
 pub async fn memory_transport(

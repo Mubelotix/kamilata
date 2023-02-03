@@ -1,6 +1,4 @@
-use futures::future::BoxFuture;
 use libp2p::{swarm::{handler::{InboundUpgradeSend, OutboundUpgradeSend}, NegotiatedSubstream}, core::either::EitherOutput};
-use std::collections::HashMap;
 
 use crate::prelude::*;
 
