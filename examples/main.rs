@@ -1,39 +1,4 @@
-//! Ping example
-//!
-//! See ../src/tutorial.rs for a step-by-step guide building the example below.
-//!
-//! In the first terminal window, run:
-//!
-//! ```sh
-//! cargo run --example ping
-//! ```
-//!
-//! It will print the PeerId and the listening addresses, e.g. `Listening on
-//! "/ip4/0.0.0.0/tcp/24915"`
-//!
-//! In the second terminal window, start a new instance of the example with:
-//!
-//! ```sh
-//! cargo run --example ping -- /ip4/127.0.0.1/tcp/24915
-//! ```
-//!
-//! The two nodes establish a connection, negotiate the ping protocol
-//! and begin pinging each other.
-
-mod behavior;
-use behavior::*;
-mod prelude;
-mod packets;
-mod handler;
-mod counter;
-mod filters;
-mod config;
-mod handler_proto;
-mod db;
-mod document;
-mod control;
-mod search;
-use prelude::*;
+use kamilata::prelude::*;
 
 pub async fn memory_transport(
     keypair: identity::Keypair,
