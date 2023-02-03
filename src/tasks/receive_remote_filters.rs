@@ -1,3 +1,5 @@
+//! This module contains the task responsible for receiving remote filters of a peer.
+
 use super::*;
 
 pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {

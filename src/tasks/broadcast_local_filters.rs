@@ -1,3 +1,5 @@
+//! This module contains the task responsible for broadcasting local filters to remote peers.
+
 use super::*;
 
 pub async fn broadcast_local_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {

@@ -1,3 +1,5 @@
+//! This module contains the handler of requests from remote peers.
+
 use super::*;
 
 pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
