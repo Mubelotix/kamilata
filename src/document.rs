@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub trait SearchResult: Send + Sync + 'static {
+pub trait SearchResult: Send + Sync + std::fmt::Debug + 'static {
     /// CID is required in order to detect duplicates.
     type Cid: Eq + Ord + Clone + Send + Sync + 'static;
 
@@ -9,7 +9,7 @@ pub trait SearchResult: Send + Sync + 'static {
     fn from_bytes(bytes: &[u8]) -> Self;
 }
 
-pub trait Document<const N: usize>: Send + Sync + 'static {
+pub trait Document<const N: usize>: Send + Sync + std::fmt::Debug + 'static {
     type SearchResult: SearchResult;
     type WordHasher: WordHasher<N>;
 

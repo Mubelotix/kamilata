@@ -36,6 +36,7 @@ impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
     }
 }
 
+#[derive(Debug)]
 struct MovieResult {
     cid: String,
     desc: String,
@@ -75,6 +76,7 @@ impl SearchResult for MovieResult {
     }
 }
 
+#[derive(Debug)]
 struct Movie<const N: usize> {
     cid: String,
     desc: String,

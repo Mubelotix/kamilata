@@ -73,9 +73,10 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         let handler_messager = HandlerMessager {
             sender: self.handler_event_sender.clone(),
         };
-        let search_state = OngoingSearchState::new(vec![words]);
+        let words_len = words.len();
+        let search_state = OngoingSearchState::new(vec![(words, words_len)]);
         let (search_controler, search_follower) = search_state.into_pair::<D::SearchResult>();
-        self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, handler_messager)));
+        self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(self.our_peer_id, search_follower, handler_messager, Arc::clone(&self.db))));
         search_controler
     }
 }
