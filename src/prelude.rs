@@ -20,6 +20,7 @@ pub use libp2p::{
     },
     ping,
     swarm::{
+        derive_prelude::FromSwarm,
         handler::{InboundUpgradeSend, OutboundUpgradeSend},
         ConnectionHandler, ConnectionHandlerEvent, IntoConnectionHandler, KeepAlive,
         NegotiatedSubstream, NetworkBehaviour, NetworkBehaviourAction, PollParameters,

@@ -54,7 +54,7 @@ async fn search_one<const N: usize, D: Document<N>>(peer_id: PeerId) -> (PeerId,
 pub async fn search<const N: usize, D: Document<N>>(
     our_peer_id: PeerId,
     search_follower: OngoingSearchFollower<D::SearchResult>,
-    handler_messager: HandlerMessager,
+    handler_messager: BehaviourController,
     db: Arc<Db<N, D>>,
 ) -> TaskOutput {
     // Extract settings

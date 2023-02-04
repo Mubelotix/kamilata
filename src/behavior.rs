@@ -5,23 +5,42 @@ pub enum KamilataEvent {
 
 }
 
-/// A struct that allows to send messages to an [handler](ConnectionHandler)
-pub struct HandlerMessager {
-    sender: Sender<(PeerId, HandlerInEvent)>,
+#[derive(Debug)]
+pub enum BehaviourControlMessage {
+    MessageHandler(PeerId, HandlerInEvent),
+    DialPeer(PeerId),
+    DialPeerAndMessage(PeerId, HandlerInEvent),
 }
 
-impl HandlerMessager {
+/// A struct that allows to send messages to an [handler](ConnectionHandler)
+pub struct BehaviourController {
+    sender: Sender<BehaviourControlMessage>,
+}
+
+impl BehaviourController {
     /// Sends a message to the handler.
-    pub async fn message(&self, peer_id: PeerId, message: HandlerInEvent) {
-        self.sender.send((peer_id, message)).await.unwrap();
+    pub async fn message_handler(&self, peer_id: PeerId, message: HandlerInEvent) {
+        self.sender.send(BehaviourControlMessage::MessageHandler(peer_id, message)).await.unwrap();
+    }
+
+    /// Requests behaviour to dial a peer.
+    pub async fn dial_peer(&self, peer_id: PeerId) {
+        self.sender.send(BehaviourControlMessage::DialPeer(peer_id)).await.unwrap();
+    }
+
+    /// Requests behaviour to dial a peer and send a message to it.
+    pub async fn dial_peer_and_message(&self, peer_id: PeerId, message: HandlerInEvent) {
+        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, message)).await.unwrap();
     }
 }
 
 pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     db: Arc<Db<N, D>>,
-    handler_event_sender: Sender<(PeerId, HandlerInEvent)>,
-    handler_event_receiver: Receiver<(PeerId, HandlerInEvent)>,
+    control_msg_sender: Sender<BehaviourControlMessage>,
+    control_msg_receiver: Receiver<BehaviourControlMessage>,
+    pending_handler_events: BTreeMap<PeerId, HandlerInEvent>,
+    handler_event_queue: Vec<(PeerId, HandlerInEvent)>,
     
     rt_handle: tokio::runtime::Handle,
 
@@ -35,13 +54,15 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
 impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
     pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, D> {
         let rt_handle = tokio::runtime::Handle::current();
-        let (handler_event_sender, handler_event_receiver) = channel(100);
+        let (control_msg_sender, control_msg_receiver) = channel(100);
 
         KamilataBehavior {
             our_peer_id,
             db: Arc::new(Db::new()),
-            handler_event_sender,
-            handler_event_receiver,
+            control_msg_sender,
+            control_msg_receiver,
+            pending_handler_events: BTreeMap::new(),
+            handler_event_queue: Vec::new(),
             rt_handle,
             task_counter: Counter::new(0),
             tasks: HashMap::new(),
@@ -70,8 +91,8 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
     pub async fn search(&mut self, words: Vec<String>) -> OngoingSearchControler<D::SearchResult> {
-        let handler_messager = HandlerMessager {
-            sender: self.handler_event_sender.clone(),
+        let handler_messager = BehaviourController {
+            sender: self.control_msg_sender.clone(),
         };
         let words_len = words.len();
         let search_state = OngoingSearchState::new(vec![(words, words_len)]);
@@ -98,18 +119,63 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         todo!()
     }
 
+    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+        match event {
+            FromSwarm::ConnectionEstablished(info) => {
+                if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
+                    self.handler_event_queue.push((info.peer_id, msg));
+                }
+            },
+            FromSwarm::DialFailure(info) => {
+                if let Some(peer_id) = info.peer_id {
+                    self.pending_handler_events.remove(&peer_id);
+                }
+            },
+            FromSwarm::ConnectionClosed(_) => todo!(),
+            _ => ()
+        }
+    }
+
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         // Message handlers first
-        if let Poll::Ready(Some((peer_id, event))) = self.handler_event_receiver.poll_recv(cx) {
-            return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-                peer_id,
-                handler: libp2p::swarm::NotifyHandler::Any,
-                event
-            })
+        if let Some((peer_id, event)) = self.handler_event_queue.pop() {
+            return Poll::Ready(
+                NetworkBehaviourAction::NotifyHandler {
+                    peer_id,
+                    handler: libp2p::swarm::NotifyHandler::Any,
+                    event
+                }
+            );
+        }
+        if let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
+            match control_message {
+                BehaviourControlMessage::MessageHandler(peer_id, event) => return Poll::Ready(
+                    NetworkBehaviourAction::NotifyHandler {
+                        peer_id,
+                        handler: libp2p::swarm::NotifyHandler::Any,
+                        event
+                    }
+                ),
+                BehaviourControlMessage::DialPeer(peer_id) => return Poll::Ready(
+                    NetworkBehaviourAction::Dial {
+                        opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
+                        handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                    }
+                ),
+                BehaviourControlMessage::DialPeerAndMessage(peer_id, event) => {
+                    self.pending_handler_events.insert(peer_id, event);
+                    return Poll::Ready(
+                        NetworkBehaviourAction::Dial {
+                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
+                            handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                        }
+                    );
+                }
+            }
         }
 
         // It seems this method gets called in a context where the tokio runtime does not exist.

@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 #[derive(Debug)]
 pub enum HandlerInEvent {
-
+    None
 }
 
 #[derive(Debug)]
@@ -85,7 +85,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     // Events are sent by the Behavior which we need to obey to.
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
-
+            HandlerInEvent::None => ()
         }
     }
 
