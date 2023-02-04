@@ -41,6 +41,6 @@ pub use std::{
     time::Duration,
 };
 pub use tokio::{
-    sync::{mpsc::*, RwLock},
+    sync::{mpsc::*, RwLock, oneshot::*},
     time::sleep,
 };

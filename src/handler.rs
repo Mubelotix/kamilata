@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 #[derive(Debug)]
 pub enum HandlerInEvent {
-    None
+    Search { report_to: tokio::sync::oneshot::Sender<ResultsPacket> },
 }
 
 #[derive(Debug)]
@@ -17,6 +17,7 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     db: Arc<Db<N, D>>,
 
     first_poll: bool,
+    waker: Option<Waker>,
     rt_handle: tokio::runtime::Handle,
     
     task_counter: Counter,
@@ -24,6 +25,7 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     /// Reserved IDs:
     ///     0: outbound refresh task
     tasks: HashMap<u32, HandlerTask>,
+    pending_tasks: Vec<PendingHandlerTask<Box<dyn std::any::Any + Send>>>,
 }
 
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
@@ -35,9 +37,11 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
             db,
 
             first_poll: true,
+            waker: None,
             rt_handle,
             task_counter: Counter::new(1),
             tasks: HashMap::new(),
+            pending_tasks: Vec::new(),
         }
     }
 }
@@ -85,8 +89,14 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     // Events are sent by the Behavior which we need to obey to.
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
-            HandlerInEvent::None => ()
-        }
+            HandlerInEvent::Search { report_to } => {
+                let pending_task = pending_handler_search::<N, D>(report_to, self.our_peer_id, self.remote_peer_id);
+                self.pending_tasks.push(pending_task);
+                if let Some(waker) = self.waker.take() {
+                    waker.wake();
+                }
+            },
+        };
     }
 
     fn inject_dial_upgrade_error(
@@ -121,6 +131,10 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
 
             let pending_task = pending_receive_remote_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
             println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
+            self.pending_tasks.push(pending_task);
+        }
+
+        if let Some(pending_task) = self.pending_tasks.pop() {
             // TODO it is assumed that it cannot fail. Is this correct?
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
                 protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), pending_task),

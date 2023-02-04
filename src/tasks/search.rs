@@ -47,14 +47,46 @@ impl std::cmp::PartialOrd for QueryList {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-async fn search_one<const N: usize, D: Document<N>>(peer_id: PeerId) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
+pub async fn handler_search<const N: usize, D: Document<N>>(
+    mut stream: KamOutStreamSink<NegotiatedSubstream>,
+    report_to: tokio::sync::oneshot::Sender<ResultsPacket>,
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId
+) -> HandlerTaskOutput {
+    HandlerTaskOutput::None
+}
+
+pub fn handler_search_boxed<const N: usize, D: Document<N>>(
+    stream: KamOutStreamSink<NegotiatedSubstream>,
+    vals: Box<dyn std::any::Any + Send>
+) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
+    let vals: Box<(tokio::sync::oneshot::Sender<ResultsPacket>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
+    handler_search::<N, D>(stream, vals.0, vals.1, vals.2).boxed()
+}
+
+pub fn pending_handler_search<const N: usize, D: Document<N>>(
+    report_to: tokio::sync::oneshot::Sender<ResultsPacket>,
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId
+) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+    PendingHandlerTask {
+        params: Box::new((report_to, our_peer_id, remote_peer_id)),
+        fut: handler_search_boxed::<N, D>
+    }
+}
+
+async fn search_one<const N: usize, D: Document<N>>(peer_id: PeerId, behavior_controller: BehaviourController) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
+    // Dial the peer, orders the handle to request it, and wait for the response
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    behavior_controller.dial_peer_and_message(peer_id, HandlerInEvent::Search { report_to: sender });
+    
     todo!()
 }
  
 pub async fn search<const N: usize, D: Document<N>>(
     our_peer_id: PeerId,
     search_follower: OngoingSearchFollower<D::SearchResult>,
-    handler_messager: BehaviourController,
+    behavior_controller: BehaviourController,
     db: Arc<Db<N, D>>,
 ) -> TaskOutput {
     // Extract settings
@@ -86,7 +118,7 @@ pub async fn search<const N: usize, D: Document<N>>(
         while ongoing_requests.len() < req_limit {
             let Some((peer_id, queries)) = providers.pop() else {break 'search};
             already_queried.insert(peer_id);
-            ongoing_requests.push(Box::pin(search_one::<N,D>(peer_id)));
+            ongoing_requests.push(Box::pin(search_one::<N,D>(peer_id, behavior_controller.clone())));
         }
 
         // Wait for one of the ongoing requests to finish

@@ -13,6 +13,7 @@ pub enum BehaviourControlMessage {
 }
 
 /// A struct that allows to send messages to an [handler](ConnectionHandler)
+#[derive(Clone)]
 pub struct BehaviourController {
     sender: Sender<BehaviourControlMessage>,
 }
@@ -36,6 +37,7 @@ impl BehaviourController {
 
 pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
+    connected_peers: Vec<PeerId>,
     db: Arc<Db<N, D>>,
     control_msg_sender: Sender<BehaviourControlMessage>,
     control_msg_receiver: Receiver<BehaviourControlMessage>,
@@ -58,6 +60,7 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
 
         KamilataBehavior {
             our_peer_id,
+            connected_peers: Vec::new(),
             db: Arc::new(Db::new()),
             control_msg_sender,
             control_msg_receiver,
@@ -122,6 +125,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
             FromSwarm::ConnectionEstablished(info) => {
+                self.connected_peers.push(info.peer_id);
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
@@ -131,7 +135,9 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     self.pending_handler_events.remove(&peer_id);
                 }
             },
-            FromSwarm::ConnectionClosed(_) => todo!(),
+            FromSwarm::ConnectionClosed(info) => {
+                self.connected_peers.retain(|peer_id| peer_id != &info.peer_id);
+            },
             _ => ()
         }
     }
@@ -151,7 +157,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                 }
             );
         }
-        if let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
+        while let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
             match control_message {
                 BehaviourControlMessage::MessageHandler(peer_id, event) => return Poll::Ready(
                     NetworkBehaviourAction::NotifyHandler {
@@ -160,13 +166,29 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                         event
                     }
                 ),
-                BehaviourControlMessage::DialPeer(peer_id) => return Poll::Ready(
-                    NetworkBehaviourAction::Dial {
-                        opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
-                        handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                BehaviourControlMessage::DialPeer(peer_id) => {
+                    // Ignore if we are already connected to the peer.
+                    if self.connected_peers.contains(&peer_id) {
+                        continue;
                     }
-                ),
+                    return Poll::Ready(
+                        NetworkBehaviourAction::Dial {
+                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
+                            handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                        }
+                    )
+                },
                 BehaviourControlMessage::DialPeerAndMessage(peer_id, event) => {
+                    // Just notify the handler directly if we are already connected to the peer.
+                    if self.connected_peers.contains(&peer_id) {
+                        return Poll::Ready(
+                            NetworkBehaviourAction::NotifyHandler {
+                                peer_id,
+                                handler: libp2p::swarm::NotifyHandler::Any,
+                                event
+                            }
+                        );
+                    }
                     self.pending_handler_events.insert(peer_id, event);
                     return Poll::Ready(
                         NetworkBehaviourAction::Dial {
