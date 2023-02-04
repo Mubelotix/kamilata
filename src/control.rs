@@ -2,12 +2,14 @@ use crate::prelude::*;
 
 pub(crate) struct OngoingSearchState {
     queries: Vec<(Vec<String>, usize)>,
+    req_limit: usize,
 }
 
 impl OngoingSearchState {
     pub(crate) fn new(queries: Vec<(Vec<String>, usize)>) -> OngoingSearchState {
         OngoingSearchState {
             queries,
+            req_limit: 50,
         }
     }
 
@@ -54,6 +56,11 @@ impl<T: SearchResult> OngoingSearchControler<T> {
         self.inner.read().await.queries.clone()
     }
 
+    /// Returns the concurrent request limit.
+    pub async fn req_limit(&self) -> usize {
+        self.inner.read().await.req_limit
+    }
+
     /// Truncates the ongoing queries to only keep the most important ones.
     /// This is useful when you start having enough relevant results to stop searching for less relevant ones.
     pub async fn truncate_queries(&self, len: usize) {
@@ -82,6 +89,11 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     /// Returns a copy of the ongoing queries.
     pub async fn queries(&self) -> Vec<(Vec<String>, usize)> {
         self.inner.read().await.queries.clone()
+    }
+
+    /// Returns the concurrent request limit.
+    pub async fn req_limit(&self) -> usize {
+        self.inner.read().await.req_limit
     }
 }
 
