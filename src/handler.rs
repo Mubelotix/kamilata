@@ -1,9 +1,16 @@
 
 use crate::prelude::*;
 
-#[derive(Debug)]
 pub enum HandlerInEvent {
-    Search { report_to: tokio::sync::oneshot::Sender<ResultsPacket> },
+    AddPendingTask(PendingHandlerTask<Box<dyn std::any::Any + Send>>),
+}
+
+impl std::fmt::Debug for HandlerInEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HandlerInEvent::AddPendingTask(_) => write!(f, "AddPendingTask"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -89,8 +96,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     // Events are sent by the Behavior which we need to obey to.
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
-            HandlerInEvent::Search { report_to } => {
-                let pending_task = pending_handler_search::<N, D>(report_to, self.our_peer_id, self.remote_peer_id);
+            HandlerInEvent::AddPendingTask(pending_task) => {
                 self.pending_tasks.push(pending_task);
                 if let Some(waker) = self.waker.take() {
                     waker.wake();

@@ -55,7 +55,6 @@ pub async fn handler_search<const N: usize, D: Document<N>>(
 ) -> HandlerTaskOutput {
     HandlerTaskOutput::None
 }
-
 pub fn handler_search_boxed<const N: usize, D: Document<N>>(
     stream: KamOutStreamSink<NegotiatedSubstream>,
     vals: Box<dyn std::any::Any + Send>
@@ -63,7 +62,6 @@ pub fn handler_search_boxed<const N: usize, D: Document<N>>(
     let vals: Box<(tokio::sync::oneshot::Sender<ResultsPacket>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     handler_search::<N, D>(stream, vals.0, vals.1, vals.2).boxed()
 }
-
 pub fn pending_handler_search<const N: usize, D: Document<N>>(
     report_to: tokio::sync::oneshot::Sender<ResultsPacket>,
     our_peer_id: PeerId,
@@ -75,19 +73,24 @@ pub fn pending_handler_search<const N: usize, D: Document<N>>(
     }
 }
 
-async fn search_one<const N: usize, D: Document<N>>(peer_id: PeerId, behavior_controller: BehaviourController) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
+async fn search_one<const N: usize, D: Document<N>>(
+    behavior_controller: BehaviourController,
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId,
+) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
     // Dial the peer, orders the handle to request it, and wait for the response
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    behavior_controller.dial_peer_and_message(peer_id, HandlerInEvent::Search { report_to: sender });
+    let pending_task = pending_handler_search::<N, D>(sender, our_peer_id, remote_peer_id);
+    behavior_controller.dial_peer_and_message(remote_peer_id, HandlerInEvent::AddPendingTask(pending_task)).await;
     
     todo!()
 }
  
 pub async fn search<const N: usize, D: Document<N>>(
-    our_peer_id: PeerId,
     search_follower: OngoingSearchFollower<D::SearchResult>,
     behavior_controller: BehaviourController,
     db: Arc<Db<N, D>>,
+    our_peer_id: PeerId,
 ) -> TaskOutput {
     // Extract settings
     let req_limit = search_follower.req_limit().await;
@@ -116,9 +119,9 @@ pub async fn search<const N: usize, D: Document<N>>(
     'search: loop {
         // Start new requests until limit is reached
         while ongoing_requests.len() < req_limit {
-            let Some((peer_id, queries)) = providers.pop() else {break 'search};
-            already_queried.insert(peer_id);
-            ongoing_requests.push(Box::pin(search_one::<N,D>(peer_id, behavior_controller.clone())));
+            let Some((remote_peer_id, queries)) = providers.pop() else {break 'search};
+            already_queried.insert(remote_peer_id);
+            ongoing_requests.push(Box::pin(search_one::<N,D>(behavior_controller.clone(), our_peer_id, remote_peer_id)));
         }
 
         // Wait for one of the ongoing requests to finish
