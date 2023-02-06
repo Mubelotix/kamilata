@@ -3,6 +3,7 @@ use crate::prelude::*;
 pub(crate) struct OngoingSearchState {
     queries: Vec<(Vec<String>, usize)>,
     req_limit: usize,
+    timeout_ms: usize,
 }
 
 impl OngoingSearchState {
@@ -10,6 +11,7 @@ impl OngoingSearchState {
         OngoingSearchState {
             queries,
             req_limit: 50,
+            timeout_ms: 50000,
         }
     }
 
@@ -61,6 +63,11 @@ impl<T: SearchResult> OngoingSearchControler<T> {
         self.inner.read().await.req_limit
     }
 
+    /// Returns the timeout in milliseconds.
+    pub async fn timeout_ms(&self) -> usize {
+        self.inner.read().await.timeout_ms
+    }
+
     /// Truncates the ongoing queries to only keep the most important ones.
     /// This is useful when you start having enough relevant results to stop searching for less relevant ones.
     pub async fn truncate_queries(&self, len: usize) {
@@ -94,6 +101,11 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     /// Returns the concurrent request limit.
     pub async fn req_limit(&self) -> usize {
         self.inner.read().await.req_limit
+    }
+
+    /// Returns the timeout in milliseconds.
+    pub async fn timeout_ms(&self) -> usize {
+        self.inner.read().await.timeout_ms
     }
 }
 

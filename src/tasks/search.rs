@@ -107,6 +107,8 @@ pub async fn search<const N: usize, D: Document<N>>(
 ) -> TaskOutput {
     // Extract settings
     let req_limit = search_follower.req_limit().await;
+    let timeout_ms = search_follower.timeout_ms().await as u64;
+    // TODO: test
 
     // Query ourselves
     let queries = search_follower.queries().await;
@@ -137,12 +139,17 @@ pub async fn search<const N: usize, D: Document<N>>(
         while ongoing_requests.len() < req_limit {
             let Some((remote_peer_id, _queries)) = providers.pop() else {break 'search};
             already_queried.insert(remote_peer_id);
-            ongoing_requests.push(Box::pin(search_one::<N,D>(queries.clone(), behavior_controller.clone(), our_peer_id, remote_peer_id)));
+            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), our_peer_id, remote_peer_id);
+            ongoing_requests.push(Box::pin(timeout(Duration::from_millis(timeout_ms), search)));
         }
 
         // Wait for one of the ongoing requests to finish
-        let ((peer_id, query_results, routes_to_results), _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
+        let (r, _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
+        let (peer_id, query_results, routes_to_results) = match r {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
         for query_result in query_results {
             search_follower.send((query_result.result, query_result.query, peer_id)).await.unwrap();
         }

@@ -42,5 +42,5 @@ pub use std::{
 };
 pub use tokio::{
     sync::{mpsc::*, RwLock, oneshot::{Sender as OneshotSender, Receiver as OneshotReceiver, channel as oneshot_channel}},
-    time::sleep,
+    time::{sleep, timeout},
 };
