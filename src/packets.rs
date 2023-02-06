@@ -10,6 +10,12 @@ impl From<libp2p::PeerId> for PeerId {
     }
 }
 
+impl From<PeerId> for libp2p::PeerId {
+    fn from(peer_id: PeerId) -> Self {
+        peer_id.0
+    }
+}
+
 impl protocol::Parcel for PeerId {
     const TYPE_NAME: &'static str = "PeerId";
 
@@ -126,7 +132,7 @@ pub struct UpdateFiltersPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct RemoteMatch {
+pub struct DistantMatch {
     /// The first (thus best) query this result matched at a distance of the corresponding index.
     /// At least one of the items in this list should be `Some`.
     pub queries: Vec<Option<u16>>,
@@ -144,7 +150,7 @@ pub struct LocalMatch {
 #[derive(Protocol, Debug, Clone)]
 pub struct ResultsPacket {
     /// A list of routing information to be used to find actual results.
-    pub routes: Vec<RemoteMatch>,
+    pub distant_matches: Vec<DistantMatch>,
     /// Contains a list of [SearchResult]s to be deserialized and used.
     pub matches: Vec<LocalMatch>,
 }

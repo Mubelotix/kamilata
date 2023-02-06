@@ -28,8 +28,8 @@ pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStr
             let local_matches = filter_db.search_local(&queries).await;
 
             stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
-                routes: remote_matches.into_iter().map(|(peer_id, distances)| {
-                    RemoteMatch {
+                distant_matches: remote_matches.into_iter().map(|(peer_id, distances)| {
+                    DistantMatch {
                         queries: distances.into_iter().map(|d| d.map(|d| d as u16)).collect(),
                         peer_id: peer_id.into(),
                     }

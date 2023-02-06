@@ -47,12 +47,22 @@ impl std::cmp::PartialOrd for QueryList {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
+struct QueryResult<S: SearchResult> {
+    result: S,
+    query: usize,
+}
+
+struct RouteToResults {
+    next: PeerId,
+    queries: QueryList,
+}
+
 async fn search_one<const N: usize, D: Document<N>>(
     queries: Vec<(Vec<String>, usize)>,
     behavior_controller: BehaviourController,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
+) -> (PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>) {
     // Dial the peer, orders the handle to request it, and wait for the response
     let request = RequestPacket::Search(SearchPacket {
         queries: queries.into_iter().map(|(words, min_matching)| Query {
@@ -62,8 +72,31 @@ async fn search_one<const N: usize, D: Document<N>>(
     });
     let (pending_task, receiver) = pending_request::<N, D>(request, our_peer_id, remote_peer_id);
     behavior_controller.dial_peer_and_message(remote_peer_id, HandlerInEvent::AddPendingTask(pending_task)).await;
-    
-    todo!()
+    let response = receiver.await.unwrap();
+
+    // Process the response
+    let (matches, distant_matches) = match response {
+        ResponsePacket::Results(ResultsPacket { distant_matches, matches }) => (matches, distant_matches),
+        _ => panic!("Unexpected response type"),
+    };
+
+    let query_results = matches.into_iter().map(|local_match|
+        QueryResult {
+            result: D::SearchResult::from_bytes(&local_match.result),
+            query: local_match.query as usize,
+        }
+    ).collect::<Vec<_>>();
+
+    let route_to_results = distant_matches.into_iter().map(|distant_match|
+        RouteToResults {
+            next: distant_match.peer_id.into(),
+            queries: QueryList {
+                queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect()
+            },
+        }
+    ).collect::<Vec<_>>();
+
+    (remote_peer_id, query_results, route_to_results)
 }
  
 pub async fn search<const N: usize, D: Document<N>>(
@@ -108,14 +141,14 @@ pub async fn search<const N: usize, D: Document<N>>(
         }
 
         // Wait for one of the ongoing requests to finish
-        let ((peer_id, local_results, remote_results), _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
+        let ((peer_id, query_results, routes_to_results), _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
-        for (result, query) in local_results {
-            search_follower.send((result, query, peer_id)).await.unwrap();
+        for query_result in query_results {
+            search_follower.send((query_result.result, query_result.query, peer_id)).await.unwrap();
         }
-        for (peer_id, queries) in remote_results {
+        for route_to_results in routes_to_results {
             if !already_queried.contains(&peer_id) {
-                providers.push((peer_id, QueryList { queries }));
+                providers.push((route_to_results.next, route_to_results.queries));
             }
         }
     }
