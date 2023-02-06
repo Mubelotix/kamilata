@@ -2,12 +2,14 @@ mod broadcast_local_filters;
 mod handle_request;
 mod receive_remote_filters;
 mod search;
+mod request;
 
 pub(self) use crate::prelude::*;
 pub use broadcast_local_filters::*;
 pub use handle_request::*;
 pub use receive_remote_filters::*;
 pub use search::*;
+pub use request::*;
 
 pub type HandlerTask = BoxFuture<'static, HandlerTaskOutput>;
 

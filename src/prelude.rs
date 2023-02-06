@@ -41,6 +41,6 @@ pub use std::{
     time::Duration,
 };
 pub use tokio::{
-    sync::{mpsc::*, RwLock, oneshot::*},
+    sync::{mpsc::*, RwLock, oneshot::{Sender as OneshotSender, Receiver as OneshotReceiver, channel as oneshot_channel}},
     time::sleep,
 };

@@ -47,40 +47,20 @@ impl std::cmp::PartialOrd for QueryList {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-pub async fn handler_search<const N: usize, D: Document<N>>(
-    mut stream: KamOutStreamSink<NegotiatedSubstream>,
-    report_to: tokio::sync::oneshot::Sender<ResultsPacket>,
-    our_peer_id: PeerId,
-    remote_peer_id: PeerId
-) -> HandlerTaskOutput {
-    HandlerTaskOutput::None
-}
-pub fn handler_search_boxed<const N: usize, D: Document<N>>(
-    stream: KamOutStreamSink<NegotiatedSubstream>,
-    vals: Box<dyn std::any::Any + Send>
-) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
-    let vals: Box<(tokio::sync::oneshot::Sender<ResultsPacket>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
-    handler_search::<N, D>(stream, vals.0, vals.1, vals.2).boxed()
-}
-pub fn pending_handler_search<const N: usize, D: Document<N>>(
-    report_to: tokio::sync::oneshot::Sender<ResultsPacket>,
-    our_peer_id: PeerId,
-    remote_peer_id: PeerId
-) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
-    PendingHandlerTask {
-        params: Box::new((report_to, our_peer_id, remote_peer_id)),
-        fut: handler_search_boxed::<N, D>
-    }
-}
-
 async fn search_one<const N: usize, D: Document<N>>(
+    queries: Vec<(Vec<String>, usize)>,
     behavior_controller: BehaviourController,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
 ) -> (PeerId, Vec<(D::SearchResult, usize)>,  Vec<(PeerId, Vec<Option<usize>>)>) {
     // Dial the peer, orders the handle to request it, and wait for the response
-    let (sender, receiver) = tokio::sync::oneshot::channel();
-    let pending_task = pending_handler_search::<N, D>(sender, our_peer_id, remote_peer_id);
+    let request = RequestPacket::Search(SearchPacket {
+        queries: queries.into_iter().map(|(words, min_matching)| Query {
+            words,
+            min_matching: min_matching as u16
+        }).collect()
+    });
+    let (pending_task, receiver) = pending_request::<N, D>(request, our_peer_id, remote_peer_id);
     behavior_controller.dial_peer_and_message(remote_peer_id, HandlerInEvent::AddPendingTask(pending_task)).await;
     
     todo!()
@@ -102,6 +82,7 @@ pub async fn search<const N: usize, D: Document<N>>(
         search_follower.send((result, query, our_peer_id)).await.unwrap();
     }
     let queries_hashed = queries
+        .clone()
         .into_iter()
         .map(|(words, n)| (
             words.into_iter().map(|w| D::WordHasher::hash_word(w.as_str())).collect::<Vec<_>>(), n
@@ -117,11 +98,13 @@ pub async fn search<const N: usize, D: Document<N>>(
     // Keep querying new peers for new results
     let mut ongoing_requests = Vec::new();
     'search: loop {
+        // TODO: update queries
+
         // Start new requests until limit is reached
         while ongoing_requests.len() < req_limit {
-            let Some((remote_peer_id, queries)) = providers.pop() else {break 'search};
+            let Some((remote_peer_id, _queries)) = providers.pop() else {break 'search};
             already_queried.insert(remote_peer_id);
-            ongoing_requests.push(Box::pin(search_one::<N,D>(behavior_controller.clone(), our_peer_id, remote_peer_id)));
+            ongoing_requests.push(Box::pin(search_one::<N,D>(queries.clone(), behavior_controller.clone(), our_peer_id, remote_peer_id)));
         }
 
         // Wait for one of the ongoing requests to finish
