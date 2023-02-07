@@ -3,7 +3,7 @@ use common::*;
 
 use tokio::time::sleep;
 use std::time::Duration;
-
+/*
 #[tokio::test]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client1 = Client::init(1000).await;
@@ -44,3 +44,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+*/

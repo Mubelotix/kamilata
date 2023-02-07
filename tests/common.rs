@@ -1,5 +1,6 @@
 use tokio::sync::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
 use kamilata::prelude::*;
+use serde::{Serialize, Deserialize};
 
 pub async fn memory_transport(
     keypair: identity::Keypair,
@@ -37,79 +38,79 @@ impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
     }
 }
 
-#[derive(Debug)]
-pub struct MovieResult {
-    pub cid: String,
-    pub desc: String,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Movie {
+    id: usize,
+    title: String,
+    overview: String,
+    genres: Vec<String>,
+    poster: String,
+    release_date: i64,
 }
 
-impl SearchResult for MovieResult {
-    type Cid = String;
+impl Movie {
+    fn full_text(&self) -> String {
+        let mut full_text = String::new();
+        full_text.push_str(&self.title);
+        full_text.push(' ');
+        full_text.push_str(&self.overview);
+        full_text.push(' ');
+        for genre in &self.genres {
+            full_text.push_str(genre);
+            full_text.push(' ');
+        }
+        full_text = full_text.to_lowercase();
+        full_text
+    }
+
+    pub fn words(&self) -> Vec<String> {
+        self.full_text().split(|c: char| c.is_whitespace() || c.is_ascii_punctuation()).filter(|w| w.len() >= 3).map(|w| w.to_string()).collect()
+    }
+}
+
+impl SearchResult for Movie {
+    type Cid = usize;
 
     fn cid(&self) -> &Self::Cid {
-        &self.cid
+        &self.id
     }
 
     fn into_bytes(self) -> Vec<u8> {
-        let mut data = Vec::new();
-        data.extend_from_slice(&(self.cid.len() as u32).to_be_bytes());
-        data.extend_from_slice(self.cid.as_bytes());
-        data.extend_from_slice(&(self.desc.len() as u32).to_be_bytes());
-        data.extend_from_slice(self.desc.as_bytes());
-        data
+        serde_json::to_vec(&self).unwrap()
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let mut bytes = bytes;
-        let cid_len = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
-        bytes = &bytes[4..];
-        let cid = String::from_utf8(bytes[..cid_len].to_vec()).unwrap();
-        bytes = &bytes[cid_len..];
-        let desc_len = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
-        bytes = &bytes[4..];
-        let desc = String::from_utf8(bytes[..desc_len].to_vec()).unwrap();
-        bytes = &bytes[desc_len..];
-        assert!(bytes.is_empty());
-        MovieResult {
-            cid,
-            desc,
-        }
+        serde_json::from_slice(bytes).unwrap()
     }
 }
 
-#[derive(Debug)]
-pub struct Movie<const N: usize> {
-    pub cid: String,
-    pub desc: String,
-}
-
-impl<const N: usize> Document<N> for Movie<N> {
-    type SearchResult = MovieResult;
+impl<const N: usize> Document<N> for Movie {
+    type SearchResult = Movie;
     type WordHasher = WordHasherImpl<N>;
 
     fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
-        &self.cid
+        &self.id
     }
 
     fn apply_to_filter(&self, filter: &mut Filter<N>) {
-        self.desc.split(' ').filter(|w| w.len() >= 3).for_each(|word| {
-            let hash = Self::WordHasher::hash_word(word);
-            filter.set_bit(hash, true);
+        self.words().iter().for_each(|word| {
+            let idx = Self::WordHasher::hash_word(word);
+            filter.set_bit(idx, true)
         });
     }
 
-    fn search_result(&self, words: &[String], min_matching: usize) -> Option<Self::SearchResult> {
-        let mut matching = 0;
-        for word in words {
-            if self.desc.contains(word) {
-                matching += 1;
+    fn search_result(&self, query_words: &[String], min_matching: usize) -> Option<Self::SearchResult> {
+        let words = self.words();
+
+        let mut matches = 0;
+        for word in query_words {
+            if words.contains(word) {
+                matches += 1;
             }
         }
-        if matching >= min_matching {
-            Some(MovieResult {
-                cid: self.cid.clone(),
-                desc: self.desc.clone(),
-            })
+
+        if min_matching <= matches {
+            Some(self.to_owned())
         } else {
             None
         }
@@ -119,7 +120,7 @@ impl<const N: usize> Document<N> for Movie<N> {
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<125000, Movie<125000>>>,
+    swarm: Swarm<KamilataBehavior<125000, Movie>>,
     addr: Multiaddr,
 }
 
@@ -127,7 +128,7 @@ pub struct Client {
 pub enum ClientCommand {
     Search {
         query: String,
-        sender: OneshotSender<Vec<MovieResult>>,
+        sender: OneshotSender<Vec<Movie>>,
     },
 }
 
@@ -136,7 +137,7 @@ pub struct ClientController {
 }
 
 impl ClientController {
-    pub async fn search(&self, query: impl Into<String>) -> Vec<MovieResult> {
+    pub async fn search(&self, query: impl Into<String>) -> Vec<Movie> {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::Search {
             query: query.into(),
@@ -181,19 +182,23 @@ impl Client {
         &self.addr
     }
 
-    pub fn behavior(&self) -> &KamilataBehavior<125000, Movie<125000>> {
+    pub fn peer_id(&self) -> PeerId {
+        self.local_peer_id
+    }
+
+    pub fn behavior(&self) -> &KamilataBehavior<125000, Movie> {
         self.swarm.behaviour()
     }
 
-    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, Movie<125000>> {
+    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, Movie> {
         self.swarm.behaviour_mut()
     }
 
-    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, Movie<125000>>> {
+    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, Movie>> {
         &self.swarm
     }
 
-    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, Movie<125000>>> {
+    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, Movie>> {
         &mut self.swarm
     }
 
