@@ -24,6 +24,8 @@ jobs:
           ~/work/web-api/agenda-parser
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/rust.yml') }}
+    - name: Install protoc
+      run: sudo apt install protobuf-compiler
     - name: Build
       run: cargo build
     - name: Run tests
