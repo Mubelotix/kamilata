@@ -1,9 +1,7 @@
 mod common;
 use common::*;
 
-use tokio::sync::mpsc::*;
 use tokio::time::sleep;
-use futures::future::join;
 use std::time::Duration;
 
 #[tokio::test]
