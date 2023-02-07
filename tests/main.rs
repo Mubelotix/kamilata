@@ -9,7 +9,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client1 = Client::init(1000).await;
-    client1.insert_documents(vec![
+    client1.behavior().insert_documents(vec![
         Movie {
             cid: "V for Vendetta".to_string(),
             desc: "In a future British dystopian society, a shadowy freedom fighter, known only by the alias of \"V\", plots to overthrow the tyrannical government - with the help of a young woman.".to_string(),
@@ -33,19 +33,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ]).await;
 
     let addr = client1.addr().clone();
-    let (sender1, receiver1) = channel(6);
-    let h1 = tokio::spawn(client1.run(receiver1));
+    let client1 = client1.run();
 
     let mut client2 = Client::init(1001).await;
     client2.swarm_mut().dial(addr).unwrap();
-    let (sender2, receiver2) = channel(6);
-    let h2 = tokio::spawn(client2.run(receiver2));
+    let client2 = client2.run();
 
     sleep(Duration::from_secs(5)).await;
 
-    sender2.send(ClientCommand::Search("Hunger".to_string())).await.unwrap();
-
-    join(h1, h2).await.0.unwrap();
+    let results = client2.search("Hunger").await;
+    assert!(results.len() == 1);
 
     Ok(())
 }

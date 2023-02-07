@@ -1,5 +1,4 @@
-use std::ops::Deref;
-
+use tokio::sync::oneshot::{channel as oneshot_channel, Sender as OneshotSender};
 use kamilata::prelude::*;
 
 pub async fn memory_transport(
@@ -126,7 +125,25 @@ pub struct Client {
 
 #[derive(Debug)]
 pub enum ClientCommand {
-    Search(String),
+    Search {
+        query: String,
+        sender: OneshotSender<Vec<MovieResult>>,
+    },
+}
+
+pub struct ClientController {
+    sender: Sender<ClientCommand>,
+}
+
+impl ClientController {
+    pub async fn search(&self, query: impl Into<String>) -> Vec<MovieResult> {
+        let (sender, receiver) = oneshot_channel();
+        self.sender.send(ClientCommand::Search {
+            query: query.into(),
+            sender,
+        }).await.unwrap();
+        receiver.await.unwrap()
+    }
 }
 
 impl Client {
@@ -180,43 +197,39 @@ impl Client {
         &mut self.swarm
     }
 
-    async fn search(&mut self, query: &str) -> OngoingSearchControler<MovieResult> {
-        let words = query.split(' ').filter(|w| w.len() >= 3).map(|w| w.to_string()).collect();
-        self.swarm.behaviour_mut().search(words).await
-    }
-
-    pub async fn run(mut self, mut command: Receiver<ClientCommand>) {
-        loop {
-            let recv = Box::pin(command.recv());
-            let value = futures::future::select(recv, self.swarm.select_next_some()).await;
-            match value {
-                future::Either::Left((Some(command), _)) => match command {
-                    ClientCommand::Search(query) => {
-                        let mut controler = self.search(&query).await;
-                        tokio::spawn(async move {
-                            let mut results = Vec::new();
-                            while let Some(result) = controler.recv().await {
-                                results.push(result);
-                            }
-                            println!("Found {} search results: {results:#?}", results.len());
-                        });
+    pub fn run(mut self) -> ClientController {
+        let (sender, mut receiver) = channel(1);
+        tokio::spawn(async move {
+            loop {
+                let recv = Box::pin(receiver.recv());
+                let value = futures::future::select(recv, self.swarm.select_next_some()).await;
+                match value {
+                    future::Either::Left((Some(command), _)) => match command {
+                        ClientCommand::Search { query, sender } => {
+                            let words = query.split(' ').filter(|w| w.len() >= 3).map(|w| w.to_string()).collect();
+                            let mut controler = self.swarm.behaviour_mut().search(words).await;
+                    
+                            tokio::spawn(async move {
+                                let mut results = Vec::new();
+                                while let Some(result) = controler.recv().await {
+                                    results.push(result.0);
+                                }
+                                println!("Found {} search results: {results:#?}", results.len());
+                                sender.send(results).unwrap();
+                            });
+                        },
                     },
-                },
-                future::Either::Left((None, _)) => break,
-                future::Either::Right((event, _)) => match event {
-                    SwarmEvent::Behaviour(e) => println!("{} produced behavior event {e:?}", self.local_peer_id),
-                    SwarmEvent::NewListenAddr { listener_id, address } => println!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
-                    _ => ()
-                },
+                    future::Either::Left((None, _)) => break,
+                    future::Either::Right((event, _)) => match event {
+                        SwarmEvent::Behaviour(e) => println!("{} produced behavior event {e:?}", self.local_peer_id),
+                        SwarmEvent::NewListenAddr { listener_id, address } => println!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
+                        _ => ()
+                    },
+                }
             }
+        });
+        ClientController {
+            sender,
         }
-    }
-}
-
-impl Deref for Client {
-    type Target = KamilataBehavior<125000, Movie<125000>>;
-
-    fn deref(&self) -> &Self::Target {
-        self.swarm.behaviour()
     }
 }
