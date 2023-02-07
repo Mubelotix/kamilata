@@ -163,9 +163,9 @@ impl Client {
         self.swarm.dial(addr).unwrap();
     }
 
-    async fn search(&mut self, query: &str) {
+    async fn search(&mut self, query: &str) -> OngoingSearchControler<MovieResult> {
         let words = query.split(' ').filter(|w| w.len() >= 3).map(|w| w.to_string()).collect();
-        self.swarm.behaviour_mut().search(words).await;
+        self.swarm.behaviour_mut().search(words).await
     }
 
     async fn run(mut self, mut command: Receiver<ClientCommand>) {
@@ -174,7 +174,16 @@ impl Client {
             let value = futures::future::select(recv, self.swarm.select_next_some()).await;
             match value {
                 future::Either::Left((Some(command), _)) => match command {
-                    ClientCommand::Search(query) => self.search(&query).await,
+                    ClientCommand::Search(query) => {
+                        let mut controler = self.search(&query).await;
+                        tokio::spawn(async move {
+                            let mut results = Vec::new();
+                            while let Some(result) = controler.recv().await {
+                                results.push(result);
+                            }
+                            println!("Found {} search results: {results:#?}", results.len());
+                        });
+                    },
                 },
                 future::Either::Left((None, _)) => break,
                 future::Either::Right((event, _)) => match event {
