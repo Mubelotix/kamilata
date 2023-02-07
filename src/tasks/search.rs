@@ -167,7 +167,11 @@ pub async fn search<const N: usize, D: Document<N>>(
             },
         };
         for query_result in query_results {
-            search_follower.send((query_result.result, query_result.query, peer_id)).await.unwrap();
+            let r = search_follower.send((query_result.result, query_result.query, peer_id)).await;
+            if r.is_err() {
+                println!("{our_peer_id} Search interrupted due to results being dropped");
+                return TaskOutput::None;
+            }
         }
         for route_to_results in routes_to_results {
             if !already_queried.contains(&peer_id) {
