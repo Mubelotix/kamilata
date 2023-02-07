@@ -32,13 +32,13 @@ pub fn request_boxed<const N: usize, D: Document<N>>(
 
 pub fn pending_request<const N: usize, D: Document<N>>(
     request: RequestPacket,
+    sender: OneshotSender<ResponsePacket>,
     our_peer_id: PeerId,
-    remote_peer_id: PeerId
-) -> (PendingHandlerTask<Box<dyn std::any::Any + Send>>, OneshotReceiver<ResponsePacket>) {
-    let (sender, receiver) = oneshot_channel();
-    (PendingHandlerTask {
+    remote_peer_id: PeerId,
+) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+    PendingHandlerTask {
         params: Box::new((request, sender, our_peer_id, remote_peer_id)),
         fut: request_boxed::<N, D>
-    }, receiver)
+    }
 }
 

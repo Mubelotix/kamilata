@@ -2,13 +2,16 @@
 use crate::prelude::*;
 
 pub enum HandlerInEvent {
-    AddPendingTask(PendingHandlerTask<Box<dyn std::any::Any + Send>>),
+    Request {
+        request: RequestPacket,
+        sender: OneshotSender<ResponsePacket>,
+    },
 }
 
 impl std::fmt::Debug for HandlerInEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HandlerInEvent::AddPendingTask(_) => write!(f, "AddPendingTask"),
+            HandlerInEvent::Request { .. } => write!(f, "Request"),
         }
     }
 }
@@ -96,11 +99,10 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     // Events are sent by the Behavior which we need to obey to.
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
-            HandlerInEvent::AddPendingTask(pending_task) => {
+            HandlerInEvent::Request { request, sender } => {
+                println!("{} Requesting an outbound substream for request from behavior", self.our_peer_id);
+                let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push(pending_task);
-                if let Some(waker) = self.waker.take() {
-                    waker.wake();
-                }
             },
         };
     }

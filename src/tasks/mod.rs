@@ -28,7 +28,7 @@ pub enum HandlerTaskOutput {
 }
 
 /// Task owned and ran by the [behaviour](NetworkBehaviour)
-pub type Task = BoxFuture<'static, TaskOutput>;
+pub type Task = Pin<Box<dyn Future<Output = TaskOutput> + Send + Sync + 'static>>;
 
 /// Output of a [Task]
 pub enum TaskOutput {
