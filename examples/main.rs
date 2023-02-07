@@ -115,15 +115,15 @@ impl<const N: usize> Document<N> for Movie<N> {
     }
 }
 
-struct InnerClient {
+struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
     swarm: Swarm<KamilataBehavior<125000, Movie<125000>>>,
     addr: Multiaddr,
 }
 
-struct Client {
-    inner: Arc<RwLock<InnerClient>>,
+enum ClientCommand {
+
 }
 
 impl Client {
@@ -150,31 +150,37 @@ impl Client {
         swarm.listen_on(addr.clone()).unwrap();
     
         Client {
-            inner: Arc::new(RwLock::new(InnerClient {
-                local_key,
-                local_peer_id,
-                swarm,
-                addr,
-            })),
+            local_key,
+            local_peer_id,
+            swarm,
+            addr,
         }
     }
 
-    async fn dial(&self, addr: Multiaddr) {
+    async fn dial(&mut self, addr: Multiaddr) {
         println!("Dialing {addr:?}");
-        self.inner.write().await.swarm.dial(addr).unwrap();
+        self.swarm.dial(addr).unwrap();
     }
 
-    async fn search(&self, query: &str) {
+    async fn search(&mut self, query: &str) {
         let words = query.split(' ').filter(|w| w.len() >= 3).map(|w| w.to_string()).collect();
-        self.inner.write().await.swarm.behaviour_mut().search(words).await;
+        self.swarm.behaviour_mut().search(words).await;
     }
 
-    async fn run(&self) {
+    async fn run(mut self, mut command: Receiver<ClientCommand>) {
         loop {
-            match self.inner.write().await.swarm.select_next_some().await {
-                SwarmEvent::NewListenAddr { address, .. } => println!("Listening on {address:?}"),
-                SwarmEvent::Behaviour(event) => println!("{event:?}"),
-                _ => {}
+            let recv = Box::pin(command.recv());
+            let value = futures::future::select(recv, self.swarm.select_next_some()).await;
+            match value {
+                future::Either::Left((Some(command), _)) => match command {
+                    
+                },
+                future::Either::Left((None, _)) => break,
+                future::Either::Right((event, _)) => match event {
+                    SwarmEvent::Behaviour(e) => println!("{} produced behavior event {e:?}", self.local_peer_id),
+                    SwarmEvent::NewListenAddr { listener_id, address } => println!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
+                    _ => ()
+                },
             }
         }
     }
@@ -182,8 +188,8 @@ impl Client {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let client1 = Arc::new(Client::init(1000).await);
-    client1.inner.read().await.swarm.behaviour().insert_documents(vec![
+    let client1 = Client::init(1000).await;
+    client1.swarm.behaviour().insert_documents(vec![
         Movie {
             cid: "V for Vendetta".to_string(),
             desc: "In a future British dystopian society, a shadowy freedom fighter, known only by the alias of \"V\", plots to overthrow the tyrannical government - with the help of a young woman.".to_string(),
@@ -206,21 +212,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     ]).await;
 
-    let addr = client1.inner.read().await.addr.clone();
-    let client1_clone = Arc::clone(&client1);
-    let h1 = tokio::spawn(client1.run());
+    let addr = client1.addr.clone();
+    let (sender1, receiver1) = channel(6);
+    let h1 = tokio::spawn(client1.run(receiver1));
 
-    let mut client2 = Arc::new(Client::init(1001).await);
-    client2.dial(addr);
-    let h2 = tokio::spawn(async move {
-        
-    });
+    let mut client2 = Client::init(1001).await;
+    client2.dial(addr).await;
+    let (sender2, receiver2) = channel(6);
+    let h2 = tokio::spawn(client2.run(receiver2));
 
     sleep(Duration::from_secs(5)).await;
 
-    client2.search("Hunger").await;
+    //client2.search("Hunger").await;
 
-    //join(h1, h2).await.0.unwrap();
+    join(h1, h2).await.0.unwrap();
 
     Ok(())
 }
