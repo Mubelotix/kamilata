@@ -51,20 +51,20 @@ impl SearchResult for MovieResult {
 
     fn into_bytes(self) -> Vec<u8> {
         let mut data = Vec::new();
-        data.extend_from_slice(&self.cid.len().to_be_bytes());
+        data.extend_from_slice(&(self.cid.len() as u32).to_be_bytes());
         data.extend_from_slice(self.cid.as_bytes());
-        data.extend_from_slice(&self.desc.len().to_be_bytes());
+        data.extend_from_slice(&(self.desc.len() as u32).to_be_bytes());
         data.extend_from_slice(self.desc.as_bytes());
         data
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
         let mut bytes = bytes;
-        let cid_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
+        let cid_len = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
         bytes = &bytes[4..];
         let cid = String::from_utf8(bytes[..cid_len].to_vec()).unwrap();
         bytes = &bytes[cid_len..];
-        let desc_len = usize::from_be_bytes(bytes[..4].try_into().unwrap());
+        let desc_len = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
         bytes = &bytes[4..];
         let desc = String::from_utf8(bytes[..desc_len].to_vec()).unwrap();
         bytes = &bytes[desc_len..];
