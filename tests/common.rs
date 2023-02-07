@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use kamilata::prelude::*;
 
 pub async fn memory_transport(
@@ -20,7 +22,7 @@ pub async fn memory_transport(
         .boxed())
 }
 
-struct WordHasherImpl<const N: usize>;
+pub struct WordHasherImpl<const N: usize>;
 
 impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
     fn hash_word(word: &str) -> usize {
@@ -37,9 +39,9 @@ impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
 }
 
 #[derive(Debug)]
-struct MovieResult {
-    cid: String,
-    desc: String,
+pub struct MovieResult {
+    pub cid: String,
+    pub desc: String,
 }
 
 impl SearchResult for MovieResult {
@@ -77,9 +79,9 @@ impl SearchResult for MovieResult {
 }
 
 #[derive(Debug)]
-struct Movie<const N: usize> {
-    cid: String,
-    desc: String,
+pub struct Movie<const N: usize> {
+    pub cid: String,
+    pub desc: String,
 }
 
 impl<const N: usize> Document<N> for Movie<N> {
@@ -115,7 +117,7 @@ impl<const N: usize> Document<N> for Movie<N> {
     }
 }
 
-struct Client {
+pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
     swarm: Swarm<KamilataBehavior<125000, Movie<125000>>>,
@@ -123,7 +125,7 @@ struct Client {
 }
 
 #[derive(Debug)]
-enum ClientCommand {
+pub enum ClientCommand {
     Search(String),
 }
 
@@ -158,9 +160,24 @@ impl Client {
         }
     }
 
-    async fn dial(&mut self, addr: Multiaddr) {
-        println!("Dialing {addr:?}");
-        self.swarm.dial(addr).unwrap();
+    pub fn addr(&self) -> &Multiaddr {
+        &self.addr
+    }
+
+    pub fn behavior(&self) -> &KamilataBehavior<125000, Movie<125000>> {
+        self.swarm.behaviour()
+    }
+
+    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, Movie<125000>> {
+        self.swarm.behaviour_mut()
+    }
+
+    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, Movie<125000>>> {
+        &self.swarm
+    }
+
+    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, Movie<125000>>> {
+        &mut self.swarm
     }
 
     async fn search(&mut self, query: &str) -> OngoingSearchControler<MovieResult> {
@@ -168,7 +185,7 @@ impl Client {
         self.swarm.behaviour_mut().search(words).await
     }
 
-    async fn run(mut self, mut command: Receiver<ClientCommand>) {
+    pub async fn run(mut self, mut command: Receiver<ClientCommand>) {
         loop {
             let recv = Box::pin(command.recv());
             let value = futures::future::select(recv, self.swarm.select_next_some()).await;
@@ -196,46 +213,10 @@ impl Client {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let client1 = Client::init(1000).await;
-    client1.swarm.behaviour().insert_documents(vec![
-        Movie {
-            cid: "V for Vendetta".to_string(),
-            desc: "In a future British dystopian society, a shadowy freedom fighter, known only by the alias of \"V\", plots to overthrow the tyrannical government - with the help of a young woman.".to_string(),
-        },
-        Movie {
-            cid: "The Matrix".to_string(),
-            desc: "When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.".to_string(),
-        },
-        Movie {
-            cid: "Revolution of Our Times".to_string(),
-            desc: "Due to political restrictions in Hong Kong, this documentary following protestors since 2019, is broken into pieces, each containing interviews and historical context of the conflict.".to_string(),
-        },
-        Movie {
-            cid: "The Social Dilemma".to_string(),
-            desc: "Explores the dangerous human impact of social networking, with tech experts sounding the alarm on their own creations.".to_string(),
-        },
-        Movie {
-            cid: "The Hunger Games".to_string(),
-            desc: "Katniss Everdeen voluntarily takes her younger sister's place in the Hunger Games: a televised competition in which two teenagers from each of the twelve Districts of Panem are chosen at random to fight to the death.".to_string(),
-        }
-    ]).await;
+impl Deref for Client {
+    type Target = KamilataBehavior<125000, Movie<125000>>;
 
-    let addr = client1.addr.clone();
-    let (sender1, receiver1) = channel(6);
-    let h1 = tokio::spawn(client1.run(receiver1));
-
-    let mut client2 = Client::init(1001).await;
-    client2.dial(addr).await;
-    let (sender2, receiver2) = channel(6);
-    let h2 = tokio::spawn(client2.run(receiver2));
-
-    sleep(Duration::from_secs(5)).await;
-
-    sender2.send(ClientCommand::Search("Hunger".to_string())).await.unwrap();
-
-    join(h1, h2).await.0.unwrap();
-
-    Ok(())
+    fn deref(&self) -> &Self::Target {
+        self.swarm.behaviour()
+    }
 }
