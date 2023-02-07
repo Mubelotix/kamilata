@@ -122,8 +122,9 @@ struct Client {
     addr: Multiaddr,
 }
 
+#[derive(Debug)]
 enum ClientCommand {
-
+    Search(String),
 }
 
 impl Client {
@@ -173,7 +174,7 @@ impl Client {
             let value = futures::future::select(recv, self.swarm.select_next_some()).await;
             match value {
                 future::Either::Left((Some(command), _)) => match command {
-                    
+                    ClientCommand::Search(query) => self.search(&query).await,
                 },
                 future::Either::Left((None, _)) => break,
                 future::Either::Right((event, _)) => match event {
@@ -223,7 +224,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     sleep(Duration::from_secs(5)).await;
 
-    //client2.search("Hunger").await;
+    sender2.send(ClientCommand::Search("Hunger".to_string())).await.unwrap();
 
     join(h1, h2).await.0.unwrap();
 
