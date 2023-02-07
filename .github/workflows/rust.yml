@@ -1,0 +1,30 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main, development ]
+  pull_request:
+    branches: [ '**' ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          ~/work/web-api/agenda-parser
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/rust.yml') }}
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: cargo test
