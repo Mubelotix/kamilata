@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub enum HandlerInEvent {
     Request {
         request: RequestPacket,
-        sender: OneshotSender<ResponsePacket>,
+        sender: OneshotSender<Option<ResponsePacket>>,
     },
 }
 

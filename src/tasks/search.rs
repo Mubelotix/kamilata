@@ -64,7 +64,7 @@ async fn search_one<const N: usize, D: Document<N>>(
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> (PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>) {
+) -> Option<(PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>)> {
     debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
@@ -79,12 +79,22 @@ async fn search_one<const N: usize, D: Document<N>>(
         request,
         sender,
     }).await;
-    let response = receiver.await.unwrap();
+    let response = match receiver.await {
+        Ok(response) => response,
+        Err(_) => {
+            warn!("{our_peer_id} Failed to receive response from {remote_peer_id}");
+            return None;
+        },
+    };
 
     // Process the response
     let (matches, distant_matches) = match response {
-        ResponsePacket::Results(ResultsPacket { distant_matches, matches }) => (matches, distant_matches),
-        _ => panic!("Unexpected response type"),
+        Some(ResponsePacket::Results(ResultsPacket { distant_matches, matches })) => (matches, distant_matches),
+        Some(_) => panic!("Unexpected response type"),
+        None => {
+            warn!("{our_peer_id} Received no response from {remote_peer_id}");
+            return None;
+        }
     };
 
     let query_results = matches.into_iter().map(|local_match|
@@ -106,7 +116,7 @@ async fn search_one<const N: usize, D: Document<N>>(
 
     debug!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", query_results.len(), route_to_results.len());
 
-    (remote_peer_id, query_results, route_to_results)
+    Some((remote_peer_id, query_results, route_to_results))
 }
  
 pub async fn search<const N: usize, D: Document<N>>(
@@ -166,7 +176,8 @@ pub async fn search<const N: usize, D: Document<N>>(
         let (r, _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
         let (peer_id, query_results, routes_to_results) = match r {
-            Ok(r) => r,
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
             Err(_) => {
                 warn!("{our_peer_id} Search request timed out");
                 continue
@@ -183,7 +194,7 @@ pub async fn search<const N: usize, D: Document<N>>(
             }
         }
         for route_to_results in routes_to_results {
-            if !already_queried.contains(&peer_id) {
+            if !already_queried.contains(&route_to_results.next) {
                 providers.push((route_to_results.next, route_to_results.queries));
             }
         }
