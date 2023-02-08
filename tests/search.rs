@@ -7,10 +7,8 @@ use kamilata::prelude::*;
 use libp2p::swarm::dial_opts::DialOpts;
 use tokio::time::sleep;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
 
 const NODE_COUNT: usize = 50;
-
 
 #[tokio::test]
 async fn search() -> Result<(), Box<dyn std::error::Error>> {
