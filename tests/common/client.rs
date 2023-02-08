@@ -54,7 +54,6 @@ impl Client {
     pub async fn init(n: usize) -> Self {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
-        println!("Local peer id: {local_peer_id:?}");
     
         let transport = memory_transport(local_key.clone()).await.expect("Failed to build transport");
 
@@ -122,15 +121,14 @@ impl Client {
                                 while let Some(result) = controler.recv().await {
                                     results.push(result.0);
                                 }
-                                println!("Found {} search results: {results:#?}", results.len());
                                 sender.send(results).unwrap();
                             });
                         },
                     },
                     future::Either::Left((None, _)) => break,
                     future::Either::Right((event, _)) => match event {
-                        SwarmEvent::Behaviour(e) => println!("{} produced behavior event {e:?}", self.local_peer_id),
-                        SwarmEvent::NewListenAddr { listener_id, address } => println!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
+                        SwarmEvent::Behaviour(e) => info!("{} produced behavior event {e:?}", self.local_peer_id),
+                        SwarmEvent::NewListenAddr { listener_id, address } => debug!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
                         _ => ()
                     },
                 }

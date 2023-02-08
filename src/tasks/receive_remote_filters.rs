@@ -3,7 +3,7 @@
 use super::*;
 
 pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
-    println!("{our_peer_id} Inbound refresh task executing");
+    trace!("{our_peer_id} Inbound refresh task executing");
 
     // Send our refresh request
     let demanded_refresh_packet = RefreshPacket::default(); // TODO: from config
@@ -15,7 +15,7 @@ pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: 
     let refresh_packet = match response {
         ResponsePacket::ConfirmRefresh(refresh_packet) => refresh_packet,
         _ => {
-            println!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for refresh confirmation packet");
+            error!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for refresh confirmation packet");
             return HandlerTaskOutput::None;
         },
     };
@@ -38,7 +38,7 @@ pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: 
         let packet = match packet {
             ResponsePacket::UpdateFilters(packet) => packet,
             _ => {
-                println!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for filters");
+                error!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for filters");
                 return HandlerTaskOutput::None;
             },
         };
@@ -46,7 +46,7 @@ pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: 
         let filters = packet.filters.iter().map(|f| f.as_slice().into()).collect::<Vec<Filter<N>>>();
         let load = filters.first().map(|f| f.load()).unwrap_or(0.0);
         db.set_remote_filter(remote_peer_id, filters).await;
-        println!("{our_peer_id} Received filters from {remote_peer_id} (load: {load})");
+        trace!("{our_peer_id} Received filters from {remote_peer_id} (load: {load})");
     }
 }
 

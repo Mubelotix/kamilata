@@ -3,18 +3,16 @@
 use super::*;
 
 pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
-    println!("{our_peer_id} Handling a request");
-
     let request = stream.next().await.unwrap().unwrap();
 
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
-            println!("{our_peer_id} It's a set refresh");
+            debug!("{our_peer_id} Received a set refresh request");
             let task = broadcast_local_filters(stream, refresh_packet, filter_db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::Search(search_packet) => {
-            println!("{our_peer_id} It's a search");
+            debug!("{our_peer_id} Received a search request");
             let hashed_queries = search_packet.queries
                 .iter()
                 .map(|q| (q.words.iter().map(|w| D::WordHasher::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))

@@ -210,7 +210,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
 
             match task.poll_unpin(cx) {
                 Poll::Ready(output) => {
-                    println!("{} Task {tid} completed!", self.our_peer_id);
+                    trace!("{} Task {tid} completed!", self.our_peer_id);
                     self.tasks.remove(&tid);
 
                     match output {

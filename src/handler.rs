@@ -91,7 +91,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
         pending_task: Self::OutboundOpenInfo,
     ) {
-        println!("{} Established outbound channel with {}", self.our_peer_id, self.remote_peer_id);
+        trace!("{} Established outbound channel with {}", self.our_peer_id, self.remote_peer_id);
         let task = (pending_task.fut)(substream, pending_task.params);
         self.tasks.insert(self.task_counter.next(), task);
     }
@@ -100,7 +100,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
             HandlerInEvent::Request { request, sender } => {
-                println!("{} Requesting an outbound substream for request from behavior", self.our_peer_id);
+                trace!("{} Requesting an outbound substream for request from behavior", self.our_peer_id);
                 let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push(pending_task);
             },
@@ -112,7 +112,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         info: Self::OutboundOpenInfo,
         error: libp2p::swarm::ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
-        todo!()
+        // TODO
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -138,7 +138,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
             self.first_poll = false;
 
             let pending_task = pending_receive_remote_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
-            println!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
+            trace!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
             self.pending_tasks.push(pending_task);
         }
 
@@ -155,17 +155,17 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
 
             match task.poll_unpin(cx) {
                 Poll::Ready(output) => {
-                    println!("{} Task {tid} completed!", self.our_peer_id);
+                    trace!("{} Task {tid} completed!", self.our_peer_id);
                     self.tasks.remove(&tid);
 
                     match output {
                         HandlerTaskOutput::SetOutboundRefreshTask(mut outbound_refresh_task) => {
-                            println!("{} outbound refresh task set", self.our_peer_id);
+                            trace!("{} outbound refresh task set", self.our_peer_id);
                             outbound_refresh_task.poll_unpin(cx); // TODO should be used
                             self.tasks.insert(0, outbound_refresh_task);
                         },
                         HandlerTaskOutput::Disconnect(disconnect_packet) => {
-                            println!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
+                            debug!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
                             // TODO: send packet
                             return Poll::Ready(ConnectionHandlerEvent::Close(
                                 ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling

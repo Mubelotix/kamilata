@@ -63,7 +63,7 @@ async fn search_one<const N: usize, D: Document<N>>(
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
 ) -> (PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>) {
-    println!("{our_peer_id} Querying {remote_peer_id} for results");
+    debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
     let request = RequestPacket::Search(SearchPacket {
@@ -101,7 +101,7 @@ async fn search_one<const N: usize, D: Document<N>>(
         }
     ).collect::<Vec<_>>();
 
-    println!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", query_results.len(), route_to_results.len());
+    debug!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", query_results.len(), route_to_results.len());
 
     (remote_peer_id, query_results, route_to_results)
 }
@@ -112,7 +112,7 @@ pub async fn search<const N: usize, D: Document<N>>(
     db: Arc<Db<N, D>>,
     our_peer_id: PeerId,
 ) -> TaskOutput {
-    println!("{our_peer_id} Starting search task");
+    info!("{our_peer_id} Starting search task");
 
     // Extract settings
     let req_limit = search_follower.req_limit().await;
@@ -162,14 +162,14 @@ pub async fn search<const N: usize, D: Document<N>>(
         let (peer_id, query_results, routes_to_results) = match r {
             Ok(r) => r,
             Err(_) => {
-                println!("{our_peer_id} Search request timed out");
+                warn!("{our_peer_id} Search request timed out");
                 continue
             },
         };
         for query_result in query_results {
             let r = search_follower.send((query_result.result, query_result.query, peer_id)).await;
             if r.is_err() {
-                println!("{our_peer_id} Search interrupted due to results being dropped");
+                warn!("{our_peer_id} Search interrupted due to results being dropped");
                 return TaskOutput::None;
             }
         }
@@ -180,7 +180,7 @@ pub async fn search<const N: usize, D: Document<N>>(
         }
     }
 
-    println!("{our_peer_id} Search task finished");
+    info!("{our_peer_id} Search task finished");
     
     TaskOutput::None
 }
