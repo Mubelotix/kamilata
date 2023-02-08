@@ -8,8 +8,8 @@ pub enum KamilataEvent {
 #[derive(Debug)]
 pub enum BehaviourControlMessage {
     MessageHandler(PeerId, HandlerInEvent),
-    DialPeer(PeerId),
-    DialPeerAndMessage(PeerId, HandlerInEvent),
+    DialPeer(PeerId, Vec<Multiaddr>),
+    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent),
 }
 
 /// A struct that allows to send messages to an [handler](ConnectionHandler)
@@ -25,13 +25,13 @@ impl BehaviourController {
     }
 
     /// Requests behaviour to dial a peer.
-    pub async fn dial_peer(&self, peer_id: PeerId) {
-        self.sender.send(BehaviourControlMessage::DialPeer(peer_id)).await.unwrap();
+    pub async fn dial_peer(&self, peer_id: PeerId, addresses: Vec<Multiaddr>) {
+        self.sender.send(BehaviourControlMessage::DialPeer(peer_id, addresses)).await.unwrap();
     }
 
     /// Requests behaviour to dial a peer and send a message to it.
-    pub async fn dial_peer_and_message(&self, peer_id: PeerId, message: HandlerInEvent) {
-        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, message)).await.unwrap();
+    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent) {
+        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await.unwrap();
     }
 }
 
@@ -129,11 +129,20 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
+                let (peer_id, addr, front) = match info.endpoint {
+                    ConnectedPoint::Dialer { address, .. } => (info.peer_id, address.to_owned(), true),
+                    ConnectedPoint::Listener { send_back_addr, .. } => (info.peer_id, send_back_addr.to_owned(), false)
+                };
+                let db2 = Arc::clone(&self.db);
+                tokio::spawn(async move {
+                    db2.insert_address(peer_id, addr, front).await;
+                });
             },
             FromSwarm::DialFailure(info) => {
                 if let Some(peer_id) = info.peer_id {
                     self.pending_handler_events.remove(&peer_id);
                 }
+                warn!("{} Dial failure: {} with {:?}", self.our_peer_id, info.error, info.peer_id);
             },
             FromSwarm::ConnectionClosed(info) => {
                 self.connected_peers.retain(|peer_id| peer_id != &info.peer_id);
@@ -166,19 +175,19 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                         event
                     }
                 ),
-                BehaviourControlMessage::DialPeer(peer_id) => {
+                BehaviourControlMessage::DialPeer(peer_id, addresses) => {
                     // Ignore if we are already connected to the peer.
                     if self.connected_peers.contains(&peer_id) {
                         continue;
                     }
                     return Poll::Ready(
                         NetworkBehaviourAction::Dial {
-                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
+                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
                             handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     )
                 },
-                BehaviourControlMessage::DialPeerAndMessage(peer_id, event) => {
+                BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, event) => {
                     // Just notify the handler directly if we are already connected to the peer.
                     if self.connected_peers.contains(&peer_id) {
                         return Poll::Ready(
@@ -192,7 +201,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     self.pending_handler_events.insert(peer_id, event);
                     return Poll::Ready(
                         NetworkBehaviourAction::Dial {
-                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).build(),
+                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
                             handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     );

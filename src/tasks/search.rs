@@ -5,11 +5,12 @@ use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq, Eq)]
-struct QueryList {
+struct ProviderInfo {
     queries: Vec<Option<usize>>,
+    addresses: Vec<Multiaddr>,
 }
 
-impl QueryList {
+impl ProviderInfo {
     fn min_dist(&self) -> Option<(usize, usize)> {
         let mut result = None;
         for (query, dist) in self.queries.iter().enumerate() {
@@ -28,7 +29,7 @@ impl QueryList {
     }
 }
 
-impl std::cmp::Ord for QueryList {
+impl std::cmp::Ord for ProviderInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.min_dist(), other.min_dist()) {
             (None, None) => Ordering::Equal,
@@ -43,7 +44,7 @@ impl std::cmp::Ord for QueryList {
     }
 }
 
-impl std::cmp::PartialOrd for QueryList {
+impl std::cmp::PartialOrd for ProviderInfo {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
@@ -54,12 +55,13 @@ struct QueryResult<S: SearchResult> {
 
 struct RouteToResults {
     next: PeerId,
-    queries: QueryList,
+    queries: ProviderInfo,
 }
 
 async fn search_one<const N: usize, D: Document<N>>(
     queries: Vec<(Vec<String>, usize)>,
     behavior_controller: BehaviourController,
+    addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
 ) -> (PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>) {
@@ -73,7 +75,7 @@ async fn search_one<const N: usize, D: Document<N>>(
         }).collect()
     });
     let (sender, receiver) = oneshot_channel();
-    behavior_controller.dial_peer_and_message(remote_peer_id, HandlerInEvent::Request {
+    behavior_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::Request {
         request,
         sender,
     }).await;
@@ -95,8 +97,9 @@ async fn search_one<const N: usize, D: Document<N>>(
     let route_to_results = distant_matches.into_iter().map(|distant_match|
         RouteToResults {
             next: distant_match.peer_id.into(),
-            queries: QueryList {
-                queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect()
+            queries: ProviderInfo {
+                queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect(),
+                addresses: distant_match.addresses.into_iter().filter_map(|a| a.parse().ok()).collect(),
             },
         }
     ).collect::<Vec<_>>();
@@ -136,7 +139,7 @@ pub async fn search<const N: usize, D: Document<N>>(
     let mut already_queried = HashSet::new();
     let mut final_peers = 0;
     for (peer_id, queries) in remote_results {
-        providers.push((peer_id, QueryList { queries }));
+        providers.push((peer_id, ProviderInfo { queries, addresses: Vec::new() }));
     }
 
     // Keep querying new peers for new results
@@ -148,9 +151,9 @@ pub async fn search<const N: usize, D: Document<N>>(
 
         // Start new requests until limit is reached
         while ongoing_requests.len() < req_limit {
-            let Some((remote_peer_id, _queries)) = providers.pop() else {break};
+            let Some((remote_peer_id, info)) = providers.pop() else {break};
             already_queried.insert(remote_peer_id);
-            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), our_peer_id, remote_peer_id);
+            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), info.addresses, our_peer_id, remote_peer_id);
             ongoing_requests.push(Box::pin(timeout(Duration::from_millis(timeout_ms), search)));
         }
 

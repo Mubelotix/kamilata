@@ -137,6 +137,7 @@ pub struct DistantMatch {
     /// At least one of the items in this list should be `Some`.
     pub queries: Vec<Option<u16>>,
     pub peer_id: PeerId,
+    pub addresses: Vec<String>,
 }
 
 #[derive(Protocol, Debug, Clone)]

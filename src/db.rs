@@ -6,6 +6,7 @@ pub struct Db<const N: usize, D: Document<N>> {
 
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
+    addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
     our_root_filter: RwLock<Filter<N>>,
 }
 
@@ -14,6 +15,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         Db {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
+            addresses: RwLock::new(BTreeMap::new()),
             our_root_filter: RwLock::new(Filter::new()),
         }
     }
@@ -108,6 +110,23 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         }
 
         local_filters
+    }
+
+    /// Adds a new address for a peer.
+    pub async fn insert_address(&self, peer_id: PeerId, addr: Multiaddr, front: bool) {
+        let mut addresses = self.addresses.write().await;
+        let addresses = addresses.entry(peer_id).or_insert_with(Vec::new);
+        if !addresses.contains(&addr) {
+            match front {
+                true => addresses.insert(0, addr),
+                false => addresses.push(addr),
+            }
+        }
+    }
+
+    /// Gets the addresses we know for a peer, ordered by how well they are expected to work.
+    pub async fn get_addresses(&self, peer_id: &PeerId) -> Vec<Multiaddr> {
+        self.addresses.read().await.get(peer_id).cloned().unwrap_or_default()
     }
 
     /// Returns peers and their distance to each query.
