@@ -64,7 +64,7 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
     
     info!("Searching...");
     let results = controlers[0].search("hunger").await;
-    info!("{results:?}");
+    info!("{results:#?}");
     let mut theoretical_hits = 0;
     for movie in movies {
         if movie.words().contains(&"hunger".to_string()) {
@@ -72,7 +72,7 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     info!("Theoretical hits: {theoretical_hits}");
-    assert!(results.len() == theoretical_hits);
+    assert!(results.hits.len() == theoretical_hits);
 
     Ok(())
 }

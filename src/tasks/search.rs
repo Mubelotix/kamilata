@@ -134,6 +134,7 @@ pub async fn search<const N: usize, D: Document<N>>(
     let remote_results = db.search_remote(&queries_hashed).await;
     let mut providers = BinaryHeap::new();
     let mut already_queried = HashSet::new();
+    let mut final_peers = 0;
     for (peer_id, queries) in remote_results {
         providers.push((peer_id, QueryList { queries }));
     }
@@ -141,6 +142,8 @@ pub async fn search<const N: usize, D: Document<N>>(
     // Keep querying new peers for new results
     let mut ongoing_requests = Vec::new();
     loop {
+        search_follower.set_query_counts(already_queried.len(), final_peers, ongoing_requests.len()).await;
+
         // TODO: update queries
 
         // Start new requests until limit is reached
@@ -166,6 +169,9 @@ pub async fn search<const N: usize, D: Document<N>>(
                 continue
             },
         };
+        if !query_results.is_empty() {
+            final_peers += 1;
+        }
         for query_result in query_results {
             let r = search_follower.send((query_result.result, query_result.query, peer_id)).await;
             if r.is_err() {

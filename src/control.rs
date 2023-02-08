@@ -4,6 +4,9 @@ pub(crate) struct OngoingSearchState {
     queries: Vec<(Vec<String>, usize)>,
     req_limit: usize,
     timeout_ms: usize,
+    queried_peers: usize,
+    final_peers: usize,
+    ongoing_queries: usize,
 }
 
 impl OngoingSearchState {
@@ -12,6 +15,9 @@ impl OngoingSearchState {
             queries,
             req_limit: 50,
             timeout_ms: 50000,
+            queried_peers: 0,
+            final_peers: 0,
+            ongoing_queries: 0,
         }
     }
 
@@ -68,6 +74,21 @@ impl<T: SearchResult> OngoingSearchControler<T> {
         self.inner.read().await.timeout_ms
     }
 
+    /// Returns the number of peers that have been queried.
+    pub async fn queried_peers(&self) -> usize {
+        self.inner.read().await.queried_peers
+    }
+
+    /// Returns the number of peers that have been queried and returned local results.
+    pub async fn final_peers(&self) -> usize {
+        self.inner.read().await.final_peers
+    }
+
+    /// Returns the number of ongoing queries.
+    pub async fn ongoing_queries(&self) -> usize {
+        self.inner.read().await.ongoing_queries
+    }
+
     /// Truncates the ongoing queries to only keep the most important ones.
     /// This is useful when you start having enough relevant results to stop searching for less relevant ones.
     pub async fn truncate_queries(&self, len: usize) {
@@ -81,8 +102,12 @@ impl<T: SearchResult> OngoingSearchControler<T> {
             search_results.push(search_result);
         }
 
+        let inner = self.inner.read().await;
+
         SearchResults {
-            search_results,
+            hits: search_results,
+            queried_peers: inner.queried_peers,
+            final_peers: inner.final_peers,
         }
     }
 }
@@ -107,10 +132,21 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     pub async fn timeout_ms(&self) -> usize {
         self.inner.read().await.timeout_ms
     }
+
+    /// Sets query/peer counts.
+    pub async fn set_query_counts(&self, queried_peers: usize, final_peers: usize, ongoing_queries: usize) {
+        let mut inner = self.inner.write().await;
+        inner.queried_peers = queried_peers;
+        inner.final_peers = final_peers;
+        inner.ongoing_queries = ongoing_queries;
+    }
 }
 
+#[derive(Debug)]
 pub struct SearchResults<T: SearchResult> {
     /// Contains search results in the order they were received.
     /// Results that have already been [received](OngoingSearchControler::recv) are not included.
-    search_results: Vec<(T, usize, PeerId)>,
+    pub hits: Vec<(T, usize, PeerId)>,
+    pub queried_peers: usize,
+    pub final_peers: usize,
 }

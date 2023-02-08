@@ -31,7 +31,7 @@ pub struct Client {
 pub enum ClientCommand {
     Search {
         query: String,
-        sender: OneshotSender<Vec<Movie>>,
+        sender: OneshotSender<SearchResults<Movie>>,
     },
 }
 
@@ -40,7 +40,7 @@ pub struct ClientController {
 }
 
 impl ClientController {
-    pub async fn search(&self, query: impl Into<String>) -> Vec<Movie> {
+    pub async fn search(&self, query: impl Into<String>) -> SearchResults<Movie> {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::Search {
             query: query.into(),
@@ -117,10 +117,12 @@ impl Client {
                             let mut controler = self.swarm.behaviour_mut().search(words).await;
                     
                             tokio::spawn(async move {
-                                let mut results = Vec::new();
-                                while let Some(result) = controler.recv().await {
-                                    results.push(result.0);
+                                let mut hits = Vec::new();
+                                while let Some(hit) = controler.recv().await {
+                                    hits.push(hit);
                                 }
+                                let mut results = controler.finish().await;
+                                results.hits = hits;
                                 sender.send(results).unwrap();
                             });
                         },
