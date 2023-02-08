@@ -109,10 +109,10 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
 
     fn inject_dial_upgrade_error(
         &mut self,
-        info: Self::OutboundOpenInfo,
+        _task: Self::OutboundOpenInfo,
         error: libp2p::swarm::ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
-        // TODO
+        warn!("{} Failed to establish outbound channel with {}: {:?}. A task has been discarded.", self.our_peer_id, self.remote_peer_id, error);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
