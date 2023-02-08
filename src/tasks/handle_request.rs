@@ -3,7 +3,14 @@
 use super::*;
 
 pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, filter_db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
-    let request = stream.next().await.unwrap().unwrap();
+    let request = match stream.next().await {
+        Some(Ok(request)) => request,
+        Some(Err(e)) => {
+            error!("{our_peer_id} Error while receiving request from {remote_peer_id}: {e}");
+            return HandlerTaskOutput::None;
+        },
+        None => return HandlerTaskOutput::None,
+    };
 
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
