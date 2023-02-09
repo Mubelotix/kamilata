@@ -129,14 +129,14 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
-                let (peer_id, addr, front) = match info.endpoint {
-                    ConnectedPoint::Dialer { address, .. } => (info.peer_id, address.to_owned(), true),
-                    ConnectedPoint::Listener { send_back_addr, .. } => (info.peer_id, send_back_addr.to_owned(), false)
-                };
-                let db2 = Arc::clone(&self.db);
-                tokio::spawn(async move {
-                    db2.insert_address(peer_id, addr, front).await;
-                });
+                if let ConnectedPoint::Dialer { address, .. } = info.endpoint {
+                    let db2 = Arc::clone(&self.db);
+                    let peer_id = info.peer_id;
+                    let addr = address.to_owned();
+                    tokio::spawn(async move {
+                        db2.insert_address(peer_id, addr, true).await;
+                    });
+                }
             },
             FromSwarm::DialFailure(info) => {
                 if let Some(peer_id) = info.peer_id {
@@ -189,6 +189,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                 },
                 BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, event) => {
                     // Just notify the handler directly if we are already connected to the peer.
+                    trace!("{} Dialing peer {peer_id} with addresses {addresses:?} and sending message", self.our_peer_id);
                     if self.connected_peers.contains(&peer_id) {
                         return Poll::Ready(
                             NetworkBehaviourAction::NotifyHandler {

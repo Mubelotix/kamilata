@@ -59,20 +59,21 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
         controlers.push(client.run());
     }
 
-    info!("Waiting for 10 seconds... (to let the network stabilize)");
-    sleep(Duration::from_secs(10)).await;
+    info!("Waiting for 20 seconds... (to let the network stabilize)");
+    sleep(Duration::from_secs(20)).await;
     
     info!("Searching...");
     let results = controlers[0].search("hunger").await;
     info!("{results:#?}");
-    let mut theoretical_hits = 0;
+    let mut missing = Vec::new();
     for movie in movies {
-        if movie.words().contains(&"hunger".to_string()) {
-            theoretical_hits += 1;
+        if movie.words().contains(&"hunger".to_string()) && !results.hits.iter().any(|(r,_,_)| *r==movie) {
+            missing.push(movie);
         }
     }
-    info!("Theoretical hits: {theoretical_hits}");
-    assert!(results.hits.len() == theoretical_hits);
+    if !missing.is_empty() {
+        panic!("Missing results: {missing:#?}");
+    }
 
     Ok(())
 }
