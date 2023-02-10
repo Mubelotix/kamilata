@@ -1,4 +1,4 @@
-//! A test running a network of 30 nodes on a corpus of 32000 documents.
+//! A test running an unorganized network of many nodes, giving them all documents and then searching for them.
 
 mod common;
 use common::*;
