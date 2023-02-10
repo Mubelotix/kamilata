@@ -5,11 +5,10 @@ use common::*;
 
 use kamilata::prelude::*;
 use libp2p::swarm::dial_opts::DialOpts;
-use sysinfo::{SystemExt, CpuExt, CpuRefreshKind};
 use tokio::time::sleep;
 use std::time::Duration;
 
-const NODE_COUNT: usize = 30;
+const NODE_COUNT: usize = 60;
 
 #[tokio::test]
 #[ignore]
@@ -59,29 +58,11 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
     let mut controlers = Vec::new();
     for client in clients {
         controlers.push(client.run());
+        sleep(Duration::from_millis((20000/NODE_COUNT) as u64)).await; // We launch the network over a time period of 20 seconds so that they don't always update their filters at the same time.
     }
 
     info!("Waiting for the network to stabilize...");
     sleep(Duration::from_secs(2)).await;
-    let mut sys = sysinfo::System::new();
-    sys.refresh_cpu_specifics(CpuRefreshKind::new().with_cpu_usage());
-    let mut cpu_info = sys.global_cpu_info();
-    let mut i = 0;
-    let mut confirmations = 0;
-    while confirmations < 5 {
-        if cpu_info.cpu_usage() < 75.0 {
-            confirmations += 1;
-        } else {
-            confirmations = 0;
-        }
-        sleep(Duration::from_millis(500)).await;
-        sys.refresh_cpu_specifics(CpuRefreshKind::new().with_cpu_usage());
-        cpu_info = sys.global_cpu_info();
-        i += 1;
-        if i > 120 {
-            panic!("CPU usage doesn't seem to decrease after booting the network. Test results would be unreliable.");
-        }
-    }
     
     info!("Searching...");
     let results = controlers[0].search("hunger").await;
