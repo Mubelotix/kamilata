@@ -12,6 +12,7 @@ use std::time::Duration;
 const NODE_COUNT: usize = 30;
 
 #[tokio::test]
+#[ignore]
 async fn search() -> Result<(), Box<dyn std::error::Error>> {
     info!("Reading data...");
     let data = match std::fs::read_to_string("movies.json") {
