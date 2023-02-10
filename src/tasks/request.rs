@@ -13,12 +13,14 @@ pub async fn request<const N: usize, D: Document<N>>(
     match stream.start_send_unpin(request) {
         Ok(()) => (),
         Err(e) => {
-            sender.send(None).unwrap();
+            trace!("{our_peer_id} Error while sending request to {remote_peer_id}: {e}");
+            let _ = sender.send(None);
             return HandlerTaskOutput::None;
         }
     }
     if stream.flush().await.is_err() {
-        sender.send(None).unwrap();
+        trace!("{our_peer_id} Error while sending request to {remote_peer_id}: flush failed");
+        let _ = sender.send(None);
         return HandlerTaskOutput::None;
     }
 
@@ -26,13 +28,14 @@ pub async fn request<const N: usize, D: Document<N>>(
     let packet = match stream.next().await {
         Some(Ok(packet)) => packet,
         _ => {
-            sender.send(None).unwrap();
+            trace!("{our_peer_id} Error while receiving response from {remote_peer_id}: stream closed");
+            let _ = sender.send(None);
             return HandlerTaskOutput::None;
         }
     };
 
     // Send results packet
-    sender.send(Some(packet)).unwrap();
+    let _ = sender.send(Some(packet));
     
     HandlerTaskOutput::None
 }
