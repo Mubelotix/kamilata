@@ -3,10 +3,11 @@ pub use crate::{
     config::KamilataProtocolConfig,
     control::{OngoingSearchControler, SearchResults},
     document::*,
+    filters::*,
 };
 pub(crate) use crate::{
-    behavior::*, config::*, control::*, counter::*, db::*, filters::*, handler::*,
-    handler_proto::*, packets::*, tasks::*,
+    behavior::*, config::*, control::*, counter::*, db::*, handler::*, handler_proto::*,
+    packets::*, tasks::*,
 };
 pub(crate) use futures::future::BoxFuture;
 pub(crate) use futures::{prelude::*, FutureExt};
