@@ -1,50 +1,25 @@
 use crate::prelude::*;
 
+/// Events produced by the [KamilataBehavior]
 #[derive(Debug)]
-pub enum KamilataEvent {
+pub enum KamilataEvent {}
 
-}
-
-#[derive(Debug)]
-pub enum BehaviourControlMessage {
-    MessageHandler(PeerId, HandlerInEvent),
-    DialPeer(PeerId, Vec<Multiaddr>),
-    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent),
-}
-
-/// A struct that allows to send messages to an [handler](ConnectionHandler)
-#[derive(Clone)]
-pub struct BehaviourController {
-    sender: Sender<BehaviourControlMessage>,
-}
-
-impl BehaviourController {
-    /// Sends a message to the handler.
-    pub async fn message_handler(&self, peer_id: PeerId, message: HandlerInEvent) {
-        self.sender.send(BehaviourControlMessage::MessageHandler(peer_id, message)).await.unwrap();
-    }
-
-    /// Requests behaviour to dial a peer.
-    pub async fn dial_peer(&self, peer_id: PeerId, addresses: Vec<Multiaddr>) {
-        self.sender.send(BehaviourControlMessage::DialPeer(peer_id, addresses)).await.unwrap();
-    }
-
-    /// Requests behaviour to dial a peer and send a message to it.
-    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent) {
-        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await.unwrap();
-    }
-}
-
+/// The [KamilataBehavior] is responsible for upkeeping a strong connection to the network and coordinating the [KamilataHandler]s.
 pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
     db: Arc<Db<N, D>>,
-    control_msg_sender: Sender<BehaviourControlMessage>,
-    control_msg_receiver: Receiver<BehaviourControlMessage>,
-    pending_handler_events: BTreeMap<PeerId, HandlerInEvent>,
-    handler_event_queue: Vec<(PeerId, HandlerInEvent)>,
-    
+
     rt_handle: tokio::runtime::Handle,
+
+    /// Used to create new [BehaviourController]s
+    control_msg_sender: Sender<BehaviourControlMessage>,
+    /// Receiver of messages from [BehaviourController]s
+    control_msg_receiver: Receiver<BehaviourControlMessage>,
+    /// When a message is to be sent to a handler that is being dialed, it is temporarily stored here.
+    pending_handler_events: BTreeMap<PeerId, HandlerInEvent>,
+    /// When a message is ready to be dispatched to a handler, it is moved here.
+    handler_event_queue: Vec<(PeerId, HandlerInEvent)>,
 
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
@@ -106,20 +81,15 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
 }
 
 impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D> {
-    type ConnectionHandler = KamilataHandlerProto<N, D>;
+    type ConnectionHandler = KamilataHandlerBuilder<N, D>;
     type OutEvent = KamilataEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+        KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
     }
 
-    fn inject_event(
-        &mut self,
-        peer_id: PeerId,
-        connection: ConnectionId,
-        event: HandlerOutEvent,
-    ) {
-        todo!()
+    fn inject_event(&mut self, _peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
+        match event {}
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
@@ -146,6 +116,8 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
             },
             FromSwarm::ConnectionClosed(info) => {
                 self.connected_peers.retain(|peer_id| peer_id != &info.peer_id);
+                self.handler_event_queue.retain(|(peer_id, _)| peer_id != &info.peer_id);
+                self.pending_handler_events.remove(&info.peer_id);
             },
             _ => ()
         }
@@ -183,7 +155,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     return Poll::Ready(
                         NetworkBehaviourAction::Dial {
                             opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
-                            handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                            handler: KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     )
                 },
@@ -203,7 +175,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     return Poll::Ready(
                         NetworkBehaviourAction::Dial {
                             opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
-                            handler: KamilataHandlerProto::new(self.our_peer_id, Arc::clone(&self.db))
+                            handler: KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     );
                 }
@@ -232,5 +204,36 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         }
         
         Poll::Pending
+    }
+}
+
+/// Internal control messages send by [BehaviourController] to [KamilataBehavior]
+#[derive(Debug)]
+pub(crate) enum BehaviourControlMessage {
+    MessageHandler(PeerId, HandlerInEvent),
+    DialPeer(PeerId, Vec<Multiaddr>),
+    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent),
+}
+
+/// A struct that allows to send messages to an [handler](ConnectionHandler)
+#[derive(Clone)]
+pub(crate) struct BehaviourController {
+    sender: Sender<BehaviourControlMessage>,
+}
+
+impl BehaviourController {
+    /// Sends a message to the handler.
+    pub async fn message_handler(&self, peer_id: PeerId, message: HandlerInEvent) {
+        self.sender.send(BehaviourControlMessage::MessageHandler(peer_id, message)).await.unwrap();
+    }
+
+    /// Requests behaviour to dial a peer.
+    pub async fn dial_peer(&self, peer_id: PeerId, addresses: Vec<Multiaddr>) {
+        self.sender.send(BehaviourControlMessage::DialPeer(peer_id, addresses)).await.unwrap();
+    }
+
+    /// Requests behaviour to dial a peer and send a message to it.
+    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent) {
+        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await.unwrap();
     }
 }

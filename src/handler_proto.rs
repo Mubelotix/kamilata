@@ -1,11 +1,12 @@
 use crate::prelude::*;
 
-pub struct KamilataHandlerProto<const N: usize, D: Document<N>> {
+/// Builder for a [KamilataHandler]
+pub struct KamilataHandlerBuilder<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     db: Arc<Db<N, D>>,
 }
 
-impl<const N: usize, D: Document<N>> IntoConnectionHandler for KamilataHandlerProto<N, D> {
+impl<const N: usize, D: Document<N>> IntoConnectionHandler for KamilataHandlerBuilder<N, D> {
     type Handler = KamilataHandler<N, D>;
 
     fn into_handler(self, remote_peer_id: &PeerId, _endpoint: &ConnectedPoint) -> Self::Handler {
@@ -17,9 +18,9 @@ impl<const N: usize, D: Document<N>> IntoConnectionHandler for KamilataHandlerPr
     }
 }
 
-impl<const N: usize, D: Document<N>> KamilataHandlerProto<N, D> {
-    pub fn new(our_peer_id: PeerId, db: Arc<Db<N, D>>) -> KamilataHandlerProto<N, D> {
-        KamilataHandlerProto {
+impl<const N: usize, D: Document<N>> KamilataHandlerBuilder<N, D> {
+    pub(crate) fn new(our_peer_id: PeerId, db: Arc<Db<N, D>>) -> KamilataHandlerBuilder<N, D> {
+        KamilataHandlerBuilder {
             our_peer_id,
             db
         }

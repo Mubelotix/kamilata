@@ -4,6 +4,7 @@ mod common;
 use common::*;
 
 use kamilata::prelude::*;
+use log::*;
 use libp2p::swarm::dial_opts::DialOpts;
 use tokio::time::sleep;
 use std::time::Duration;

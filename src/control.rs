@@ -38,12 +38,14 @@ impl OngoingSearchState {
     }
 }
 
+/// A search controller is an handle to an ongoing search, started with [KamilataBehaviour::search].
+/// It allows getting results asynchronously, and to control the search.
 pub struct OngoingSearchControler<T: SearchResult> {
     receiver: Receiver<(T, usize, PeerId)>,
     inner: Arc<RwLock<OngoingSearchState>>,
 }
 
-pub struct OngoingSearchFollower<T: SearchResult> {
+pub(crate) struct OngoingSearchFollower<T: SearchResult> {
     sender: Sender<(T, usize, PeerId)>,
     inner: Arc<RwLock<OngoingSearchState>>,
 }
@@ -142,11 +144,14 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     }
 }
 
+/// A struct containing search results and some useful information about how the search went.
 #[derive(Debug)]
 pub struct SearchResults<T: SearchResult> {
     /// Contains search results in the order they were received.
     /// Results that have already been [received](OngoingSearchControler::recv) are not included.
     pub hits: Vec<(T, usize, PeerId)>,
+    /// Numbers of peers that have been queried
     pub queried_peers: usize,
+    /// Numbers of peers that have been able to provide us with hits
     pub final_peers: usize,
 }

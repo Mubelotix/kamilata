@@ -119,7 +119,7 @@ async fn search_one<const N: usize, D: Document<N>>(
     Some((remote_peer_id, query_results, route_to_results))
 }
  
-pub async fn search<const N: usize, D: Document<N>>(
+pub(crate) async fn search<const N: usize, D: Document<N>>(
     search_follower: OngoingSearchFollower<D::SearchResult>,
     behavior_controller: BehaviourController,
     db: Arc<Db<N, D>>,

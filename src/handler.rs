@@ -1,9 +1,13 @@
 
 use crate::prelude::*;
 
+/// Events aimed at a [KamilataHandler]
 pub enum HandlerInEvent {
+    /// Asks the handler to send a request and receive a response.
     Request {
+        /// This request packet will be sent through a new outbound substream.
         request: RequestPacket,
+        /// The response will be sent back through this channel.
         sender: OneshotSender<Option<ResponsePacket>>,
     },
 }
@@ -16,11 +20,12 @@ impl std::fmt::Debug for HandlerInEvent {
     }
 }
 
+/// Events produced by a [KamilataHandler] (unused)
 #[derive(Debug)]
-pub enum HandlerOutEvent {
+pub enum HandlerOutEvent {}
 
-}
-
+/// The [KamilataHandler] is responsible for handling a connection to a remote peer.
+/// Multiple handlers are managed by the [KamilataBehavior].
 pub struct KamilataHandler<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
@@ -34,6 +39,7 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     /// Reserved IDs:
     ///     0: outbound refresh task
     tasks: HashMap<u32, HandlerTask>,
+    /// Tasks waiting to be inserted into the `tasks` map, because their outbound substream is still opening.
     pending_tasks: Vec<PendingHandlerTask<Box<dyn std::any::Any + Send>>>,
 }
 
@@ -44,7 +50,6 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
             our_peer_id,
             remote_peer_id,
             db,
-
             first_poll: true,
             rt_handle,
             task_counter: Counter::new(1),
