@@ -27,7 +27,6 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     db: Arc<Db<N, D>>,
 
     first_poll: bool,
-    waker: Option<Waker>,
     rt_handle: tokio::runtime::Handle,
     
     task_counter: Counter,
@@ -47,7 +46,6 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
             db,
 
             first_poll: true,
-            waker: None,
             rt_handle,
             task_counter: Counter::new(1),
             tasks: HashMap::new(),
