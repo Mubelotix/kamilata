@@ -55,7 +55,7 @@ struct QueryResult<S: SearchResult> {
 
 struct RouteToResults {
     next: PeerId,
-    queries: ProviderInfo,
+    info: ProviderInfo,
 }
 
 async fn search_one<const N: usize, D: Document<N>>(
@@ -107,7 +107,7 @@ async fn search_one<const N: usize, D: Document<N>>(
     let route_to_results = distant_matches.into_iter().map(|distant_match|
         RouteToResults {
             next: distant_match.peer_id.into(),
-            queries: ProviderInfo {
+            info: ProviderInfo {
                 queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect(),
                 addresses: distant_match.addresses.into_iter().filter_map(|a| a.parse().ok()).collect(),
             },
@@ -194,8 +194,8 @@ pub async fn search<const N: usize, D: Document<N>>(
             }
         }
         for route_to_results in routes_to_results {
-            if !already_queried.contains(&route_to_results.next) {
-                providers.push((route_to_results.next, route_to_results.queries));
+            if !already_queried.contains(&route_to_results.next) && !route_to_results.info.addresses.is_empty() {
+                providers.push((route_to_results.next, route_to_results.info));
             }
         }
     }

@@ -34,11 +34,14 @@ pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStr
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {
-                distant_matches.push(DistantMatch {
-                    queries: distances.into_iter().map(|d| d.map(|d| d as u16)).collect(),
-                    peer_id: peer_id.into(),
-                    addresses: db.get_addresses(&peer_id).await.into_iter().map(|a| a.to_string()).collect(),
-                });
+                let addresses: Vec<String> = db.get_addresses(&peer_id).await.into_iter().map(|a| a.to_string()).collect();
+                if !addresses.is_empty() {
+                    distant_matches.push(DistantMatch {
+                        queries: distances.into_iter().map(|d| d.map(|d| d as u16)).collect(),
+                        peer_id: peer_id.into(),
+                        addresses,
+                    });
+                }
             }
 
             stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
