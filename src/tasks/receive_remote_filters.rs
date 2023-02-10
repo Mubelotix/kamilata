@@ -44,9 +44,8 @@ pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: 
         };
         // TODO check packet.filters lenght and count and time between received
         let filters = packet.filters.iter().map(|f| f.as_slice().into()).collect::<Vec<Filter<N>>>();
-        let load = filters.first().map(|f| f.load()).unwrap_or(0.0);
         db.set_remote_filter(remote_peer_id, filters).await;
-        trace!("{our_peer_id} Received filters from {remote_peer_id} (load: {load})");
+        trace!("{our_peer_id} Received filters from {remote_peer_id}");
     }
 }
 
