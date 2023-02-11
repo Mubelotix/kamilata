@@ -71,12 +71,22 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search(&mut self, words: Vec<String>) -> OngoingSearchControler<D::SearchResult> {
+    pub async fn search(&mut self, words: Vec<String>) -> OngoingSearchController<D::SearchResult> {
+        self.search_with_config(words, SearchConfig::default()).await
+    }
+
+    /// Starts a new search with custom [SearchPriority] and returns an [handler](OngoingSearchControler) to control it.
+    pub async fn search_with_priority(&mut self, words: Vec<String>, priority: SearchPriority) -> OngoingSearchController<D::SearchResult> {
+        self.search_with_config(words, SearchConfig::default().with_priority(priority)).await
+    }
+
+    /// Starts a new search with custom [SearchConfig] and returns an [handler](OngoingSearchControler) to control it.
+    pub async fn search_with_config(&mut self, words: Vec<String>, config: SearchConfig) -> OngoingSearchController<D::SearchResult> {
         let handler_messager = BehaviourController {
             sender: self.control_msg_sender.clone(),
         };
         let words_len = words.len();
-        let search_state = OngoingSearchState::new(vec![(words, words_len)]);
+        let search_state = OngoingSearchState::new(vec![(words, words_len)], config);
         let (search_controler, search_follower) = search_state.into_pair::<D::SearchResult>();
         self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, handler_messager, Arc::clone(&self.db), self.our_peer_id)));
         search_controler

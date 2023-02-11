@@ -4,13 +4,113 @@ use super::*;
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
 
+// Constants for each [FixedSearchPriority]. They are used as const generics.
+const ANY: usize = 0;
+const SPEED: usize = 1;
+const RELEVANCE: usize = 2;
+
+/// Information about a provider, generic over the priority of the search.
+/// The priority will determine the implementation of [Ord] on this struct.
 #[derive(Debug, PartialEq, Eq)]
-struct ProviderInfo {
+struct ProviderInfo<const PRIORITY: usize> {
+    peer_id: PeerId,
     queries: Vec<Option<usize>>,
     addresses: Vec<Multiaddr>,
 }
 
-impl ProviderInfo {
+/// A trait allowing APIs over any [ProviderInfo], regardless of the priority.
+trait AnyProviderInfo: Sized {
+    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>);
+    fn into_whatever(self) -> ProviderInfo<ANY> {
+        let (peer_id, queries, addresses) = self.into_parts();
+        ProviderInfo { peer_id, queries, addresses }
+    }
+    fn into_speed(self) -> ProviderInfo<SPEED> {
+        let (peer_id, queries, addresses) = self.into_parts();
+        ProviderInfo { peer_id, queries, addresses }
+    }
+    fn into_relevance(self) -> ProviderInfo<RELEVANCE> {
+        let (peer_id, queries, addresses) = self.into_parts();
+        ProviderInfo { peer_id, queries, addresses }
+    }
+}
+
+impl AnyProviderInfo for ProviderInfo<ANY> {
+    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+        (self.peer_id, self.queries, self.addresses)
+    }
+}
+impl AnyProviderInfo for ProviderInfo<SPEED> {
+    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+        (self.peer_id, self.queries, self.addresses)
+    }
+}
+impl AnyProviderInfo for ProviderInfo<RELEVANCE> {
+    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+        (self.peer_id, self.queries, self.addresses)
+    }
+}
+impl AnyProviderInfo for (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+        self
+    }
+}
+
+/// A [BinaryHeap] that can change its way of ordering its elements.
+enum ProviderBinaryHeap {
+    Speed(BinaryHeap<ProviderInfo<SPEED>>),
+    Relevance(BinaryHeap<ProviderInfo<RELEVANCE>>),
+}
+
+impl ProviderBinaryHeap {
+    fn push(&mut self, provider: impl AnyProviderInfo) {
+        match self {
+            ProviderBinaryHeap::Speed(heap) => heap.push(provider.into_speed()),
+            ProviderBinaryHeap::Relevance(heap) => heap.push(provider.into_relevance()),
+        }
+    }
+
+    fn pop(&mut self) -> Option<ProviderInfo<ANY>> {
+        match self {
+            ProviderBinaryHeap::Speed(heap) => heap.pop().map(|provider| provider.into_whatever()),
+            ProviderBinaryHeap::Relevance(heap) => heap.pop().map(|provider| provider.into_whatever()),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            ProviderBinaryHeap::Speed(heap) => heap.is_empty(),
+            ProviderBinaryHeap::Relevance(heap) => heap.is_empty(),
+        }
+    }
+
+    fn update_priority(&mut self, priority: SearchPriority, documents_found: usize) {
+        match priority.get_priority(documents_found) {
+            FixedSearchPriority::Speed => match self {
+                ProviderBinaryHeap::Speed(_) => (),
+                ProviderBinaryHeap::Relevance(heap) => {
+                    let mut new_heap = BinaryHeap::new();
+                    for provider in heap.drain() {
+                        new_heap.push(provider.into_speed());
+                    }
+                    *self = ProviderBinaryHeap::Speed(new_heap);
+                }
+            },
+            FixedSearchPriority::Relevance => match self {
+                ProviderBinaryHeap::Speed(heap) => {
+                    let mut new_heap = BinaryHeap::new();
+                    for provider in heap.drain() {
+                        new_heap.push(provider.into_relevance());
+                    }
+                    *self = ProviderBinaryHeap::Relevance(new_heap);
+                }
+                ProviderBinaryHeap::Relevance(_) => (),
+            },
+        }
+    }
+}
+
+impl<const PRIORITY: usize> ProviderInfo<PRIORITY> {
     fn min_dist(&self) -> Option<(usize, usize)> {
         let mut result = None;
         for (query, dist) in self.queries.iter().enumerate() {
@@ -29,7 +129,7 @@ impl ProviderInfo {
     }
 }
 
-impl std::cmp::Ord for ProviderInfo {
+impl std::cmp::Ord for ProviderInfo<SPEED> {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.min_dist(), other.min_dist()) {
             (None, None) => Ordering::Equal,
@@ -44,7 +144,26 @@ impl std::cmp::Ord for ProviderInfo {
     }
 }
 
-impl std::cmp::PartialOrd for ProviderInfo {
+impl std::cmp::PartialOrd for ProviderInfo<SPEED> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+impl std::cmp::Ord for ProviderInfo<RELEVANCE> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.min_dist(), other.min_dist()) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some((min_dist, min_dist_query)), Some((other_min_dist, other_min_dist_query))) => match min_dist_query.cmp(&other_min_dist_query) {
+                Ordering::Equal => min_dist.cmp(&other_min_dist).reverse(),
+                Ordering::Less => Ordering::Greater,
+                Ordering::Greater => Ordering::Less,
+            },
+        }
+    }
+}
+
+impl std::cmp::PartialOrd for ProviderInfo<RELEVANCE> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
@@ -53,18 +172,13 @@ struct QueryResult<S: SearchResult> {
     query: usize,
 }
 
-struct RouteToResults {
-    next: PeerId,
-    info: ProviderInfo,
-}
-
 async fn search_one<const N: usize, D: Document<N>>(
     queries: Vec<(Vec<String>, usize)>,
     behavior_controller: BehaviourController,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> Option<(PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<RouteToResults>)> {
+) -> Option<(PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<ProviderInfo<ANY>>)> {
     debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
@@ -105,12 +219,10 @@ async fn search_one<const N: usize, D: Document<N>>(
     ).collect::<Vec<_>>();
 
     let route_to_results = distant_matches.into_iter().map(|distant_match|
-        RouteToResults {
-            next: distant_match.peer_id.into(),
-            info: ProviderInfo {
-                queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect(),
-                addresses: distant_match.addresses.into_iter().filter_map(|a| a.parse().ok()).collect(),
-            },
+        ProviderInfo {
+            peer_id: distant_match.peer_id.into(),
+            queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect(),
+            addresses: distant_match.addresses.into_iter().filter_map(|a| a.parse().ok()).collect(),
         }
     ).collect::<Vec<_>>();
 
@@ -127,10 +239,6 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
 ) -> TaskOutput {
     info!("{our_peer_id} Starting search task");
 
-    // Extract settings
-    let req_limit = search_follower.req_limit().await;
-    let timeout_ms = search_follower.timeout_ms().await as u64;
-
     // Query ourselves
     let queries = search_follower.queries().await;
     let local_results = db.search_local(&queries).await;
@@ -145,26 +253,30 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
         ))
         .collect::<Vec<_>>();
     let remote_results = db.search_remote(&queries_hashed).await;
-    let mut providers = BinaryHeap::new();
+    let mut config;
+    let mut providers = ProviderBinaryHeap::Speed(BinaryHeap::new());
     let mut already_queried = HashSet::new();
     let mut final_peers = 0;
+    let mut documents_found = 0;
     for (peer_id, queries) in remote_results {
-        providers.push((peer_id, ProviderInfo { queries, addresses: Vec::new() }));
+        providers.push((peer_id, queries, Vec::new()));
     }
 
     // Keep querying new peers for new results
     let mut ongoing_requests = Vec::new();
     loop {
         search_follower.set_query_counts(already_queried.len(), final_peers, ongoing_requests.len()).await;
+        config = search_follower.config().await;
+        providers.update_priority(config.priority, documents_found);
 
         // TODO: update queries
 
         // Start new requests until limit is reached
-        while ongoing_requests.len() < req_limit {
-            let Some((remote_peer_id, info)) = providers.pop() else {break};
-            already_queried.insert(remote_peer_id);
-            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), info.addresses, our_peer_id, remote_peer_id);
-            ongoing_requests.push(Box::pin(timeout(Duration::from_millis(timeout_ms), search)));
+        while ongoing_requests.len() < config.req_limit {
+            let Some(provider) = providers.pop() else {break};
+            already_queried.insert(provider.peer_id);
+            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
+            ongoing_requests.push(Box::pin(timeout(Duration::from_millis(config.timeout_ms as u64), search)));
         }
 
         // Ends the loop when no more requests can be made
@@ -175,7 +287,7 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
         // Wait for one of the ongoing requests to finish
         let (r, _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
-        let (peer_id, query_results, routes_to_results) = match r {
+        let (peer_id, query_results, routes) = match r {
             Ok(Some(r)) => r,
             Ok(None) => continue,
             Err(_) => {
@@ -186,6 +298,7 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
         if !query_results.is_empty() {
             final_peers += 1;
         }
+        documents_found += query_results.len(); // TODO: make sure it's not too easy for a malicious peer to make this increase too much
         for query_result in query_results {
             let r = search_follower.send((query_result.result, query_result.query, peer_id)).await;
             if r.is_err() {
@@ -193,9 +306,9 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
                 return TaskOutput::None;
             }
         }
-        for route_to_results in routes_to_results {
-            if !already_queried.contains(&route_to_results.next) && !route_to_results.info.addresses.is_empty() {
-                providers.push((route_to_results.next, route_to_results.info));
+        for route in routes {
+            if !already_queried.contains(&route.peer_id) && !route.addresses.is_empty() {
+                providers.push(route);
             }
         }
     }

@@ -1,32 +1,140 @@
 use crate::prelude::*;
 
+/// Primitive type representing a search priority, used to determine which results to load first.
+#[derive(Debug, Clone)]
+pub enum FixedSearchPriority {
+    /// Get results fast without taking relevance into account
+    Speed,
+    /// Focus on finding the best results first
+    Relevance
+}
+
+/// Advanced search priority that can change over time based on variable parameters
+#[derive(Debug, Clone)]
+pub enum SearchPriority {
+    /// Simple search priority that cannot change automatically
+    Fixed(FixedSearchPriority),
+    /// Variable search priority that can change over time
+    /// 
+    /// Note: If you need more control, remember you can programmatically change the priority using [OngoingSearchController::set_priority].
+    Variable {
+        /// What priority to use first
+        first: Box<SearchPriority>,
+        /// Until how many documents have been found
+        until_documents: usize,
+        /// What priority to use after
+        then: Box<SearchPriority>,
+    }
+}
+
+impl SearchPriority {
+    /// Builds a priority fixed to [FixedSearchPriority::Speed]
+    pub fn speed() -> SearchPriority {
+        SearchPriority::Fixed(FixedSearchPriority::Speed)
+    }
+
+    /// Builds a priority fixed to [FixedSearchPriority::Relevance]
+    pub fn relevance() -> SearchPriority {
+        SearchPriority::Fixed(FixedSearchPriority::Relevance)
+    }
+
+    /// Determines the current [FixedSearchPriority] based on parameters
+    pub fn get_priority(&self, documents_found: usize) -> FixedSearchPriority {
+        match self {
+            SearchPriority::Fixed(p) => p.clone(),
+            SearchPriority::Variable { first, until_documents, then } => {
+                if documents_found < *until_documents {
+                    first.get_priority(documents_found)
+                } else {
+                    then.get_priority(documents_found)
+                }
+            }
+        }
+    }
+}
+
+/// Configuration for a search
+#[derive(Debug, Clone)]
+pub struct SearchConfig {
+    /// Priority of the search
+    pub priority: SearchPriority,
+    /// Maximum number of concurrent requests to send to peers
+    pub req_limit: usize,
+    /// Number of milliseconds to wait for a response before considering the peer unresponsive
+    pub timeout_ms: usize,
+}
+
+impl SearchConfig {
+    pub fn new(priority: SearchPriority, req_limit: usize, timeout_ms: usize) -> SearchConfig {
+        SearchConfig {
+            priority,
+            req_limit,
+            timeout_ms,
+        }
+    }
+
+    pub fn with_priority(self, priority: SearchPriority) -> SearchConfig {
+        SearchConfig {
+            priority,
+            ..self
+        }
+    }
+
+    pub fn with_req_limit(self, req_limit: usize) -> SearchConfig {
+        // TODO: req_limit should be at least 1
+        SearchConfig {
+            req_limit,
+            ..self
+        }
+    }
+
+    pub fn with_timeout_ms(self, timeout_ms: usize) -> SearchConfig {
+        SearchConfig {
+            timeout_ms,
+            ..self
+        }
+    }
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        SearchConfig {
+            priority: SearchPriority::Variable {
+                first: Box::new(SearchPriority::speed()),
+                until_documents: 25,
+                then: Box::new(SearchPriority::relevance()),
+            },
+            req_limit: 10,
+            timeout_ms: 50000,
+        }
+    }
+}
+
 pub(crate) struct OngoingSearchState {
     queries: Vec<(Vec<String>, usize)>,
-    req_limit: usize,
-    timeout_ms: usize,
+    config: SearchConfig,
     queried_peers: usize,
     final_peers: usize,
     ongoing_queries: usize,
 }
 
 impl OngoingSearchState {
-    pub(crate) fn new(queries: Vec<(Vec<String>, usize)>) -> OngoingSearchState {
+    pub(crate) fn new(queries: Vec<(Vec<String>, usize)>, config: SearchConfig) -> OngoingSearchState {
         OngoingSearchState {
             queries,
-            req_limit: 50,
-            timeout_ms: 50000,
+            config,
             queried_peers: 0,
             final_peers: 0,
             ongoing_queries: 0,
         }
     }
 
-    pub(crate) fn into_pair<T: SearchResult>(self) -> (OngoingSearchControler<T>, OngoingSearchFollower<T>) {
+    pub(crate) fn into_pair<T: SearchResult>(self) -> (OngoingSearchController<T>, OngoingSearchFollower<T>) {
         let (sender, receiver) = channel(100);
         let inner = Arc::new(RwLock::new(self));
 
         (
-            OngoingSearchControler {
+            OngoingSearchController {
                 receiver,
                 inner: inner.clone(),
             },
@@ -40,7 +148,7 @@ impl OngoingSearchState {
 
 /// A search controller is an handle to an ongoing search, started with [KamilataBehaviour::search].
 /// It allows getting results asynchronously, and to control the search.
-pub struct OngoingSearchControler<T: SearchResult> {
+pub struct OngoingSearchController<T: SearchResult> {
     receiver: Receiver<(T, usize, PeerId)>,
     inner: Arc<RwLock<OngoingSearchState>>,
 }
@@ -50,7 +158,7 @@ pub(crate) struct OngoingSearchFollower<T: SearchResult> {
     inner: Arc<RwLock<OngoingSearchState>>,
 }
 
-impl<T: SearchResult> OngoingSearchControler<T> {
+impl<T: SearchResult> OngoingSearchController<T> {
     /// Waits for the next search result.
     pub async fn recv(&mut self) -> Option<(T, usize, PeerId)> {
         self.receiver.recv().await
@@ -66,14 +174,34 @@ impl<T: SearchResult> OngoingSearchControler<T> {
         self.inner.read().await.queries.clone()
     }
 
+    /// Returns the current search config.
+    pub async fn config(&self) -> SearchConfig {
+        self.inner.read().await.config.clone()
+    }
+
+    /// Sets the search config.
+    pub async fn set_config(&self, config: SearchConfig) {
+        self.inner.write().await.config = config;
+    }
+
+    /// Returns the current search priority.
+    pub async fn priority(&self) -> SearchPriority {
+        self.inner.read().await.config.priority.clone()
+    }
+
+    /// Sets the search priority.
+    pub async fn set_priority(&self, priority: SearchPriority) {
+        self.inner.write().await.config.priority = priority;
+    }
+
     /// Returns the concurrent request limit.
     pub async fn req_limit(&self) -> usize {
-        self.inner.read().await.req_limit
+        self.inner.read().await.config.req_limit
     }
 
     /// Returns the timeout in milliseconds.
     pub async fn timeout_ms(&self) -> usize {
-        self.inner.read().await.timeout_ms
+        self.inner.read().await.config.timeout_ms
     }
 
     /// Returns the number of peers that have been queried.
@@ -125,14 +253,9 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
         self.inner.read().await.queries.clone()
     }
 
-    /// Returns the concurrent request limit.
-    pub async fn req_limit(&self) -> usize {
-        self.inner.read().await.req_limit
-    }
-
-    /// Returns the timeout in milliseconds.
-    pub async fn timeout_ms(&self) -> usize {
-        self.inner.read().await.timeout_ms
+    /// Returns the current search config.
+    pub async fn config(&self) -> SearchConfig {
+        self.inner.read().await.config.clone()
     }
 
     /// Sets query/peer counts.

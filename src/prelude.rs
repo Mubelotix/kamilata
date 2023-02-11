@@ -1,7 +1,9 @@
 pub use crate::{
     behavior::KamilataBehavior,
     config::KamilataProtocolConfig,
-    control::{OngoingSearchControler, SearchResults},
+    control::{
+        FixedSearchPriority, OngoingSearchController, SearchConfig, SearchPriority, SearchResults,
+    },
     document::*,
     filters::*,
 };
