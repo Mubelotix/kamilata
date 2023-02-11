@@ -89,6 +89,9 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         let mut level = 0;
         let filters = self.filters.read().await;
         loop {
+            if filters.len() > 10 {
+                break;
+            }
             let mut filter = Filter::new();
             let mut is_null = true;
             for (peer_id, filters) in filters.iter() {
