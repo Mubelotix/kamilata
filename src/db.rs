@@ -7,7 +7,7 @@ pub struct Db<const N: usize, D: Document<N>> {
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
-    our_root_filter: RwLock<Filter<N>>,
+    our_filters: RwLock<Vec<Filter<N>>>,
 }
 
 impl<const N: usize, D: Document<N>> Db<N, D> {
@@ -16,14 +16,14 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
-            our_root_filter: RwLock::new(Filter::new()),
+            our_filters: RwLock::new(vec![Filter::new()]),
         }
     }
 
     /// Inserts a single document to the database.
     /// This will update the root filter without fully recompting it.
     pub async fn insert_document(&self, document: D) {
-        document.apply_to_filter(self.our_root_filter.write().await.deref_mut());
+        document.apply_to_filter(self.our_filters.write().await.first_mut().unwrap().deref_mut());
         self.documents.write().await.insert(document.cid().clone(), document);
     }
 
@@ -33,16 +33,16 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
     pub async fn insert_documents(&self, documents: Vec<D>) {
         let new_documents = documents;
         let mut documents = self.documents.write().await;
-        let mut our_root_filter = self.our_root_filter.write().await;
+        let mut our_root_filter = self.our_filters.write().await;
         for document in new_documents {
-            document.apply_to_filter(our_root_filter.deref_mut());
+            document.apply_to_filter(our_root_filter.first_mut().unwrap().deref_mut());
             documents.insert(document.cid().clone(), document);
         }
     }
 
     /// Removes all documents from the database.
     pub async fn clear_documents(&self) {
-        *self.our_root_filter.write().await = Filter::new();
+        *self.our_filters.write().await.first_mut().unwrap() = Filter::new();
         self.documents.write().await.clear();
     }
 
@@ -73,7 +73,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
                 document.apply_to_filter(&mut new_root_filter);
             }
             drop(documents);
-            *self.our_root_filter.write().await = new_root_filter;
+            *self.our_filters.write().await.first_mut().unwrap() = new_root_filter;
         }
     }
 
@@ -82,37 +82,33 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         self.filters.write().await.insert(peer_id, filters);
     }
 
-    pub async fn gen_local_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<N>> {
-        let mut local_filters = Vec::new();
-        local_filters.push(self.our_root_filter.read().await.clone());
+    pub(crate) async fn update_our_filters(&self) {
+        let mut our_filters  = self.our_filters.write().await;
+        our_filters.truncate(1);
 
-        let mut level = 0;
         let filters = self.filters.read().await;
-        loop {
-            if filters.len() > 10 {
-                break;
-            }
+        for level in 1..10 {
             let mut filter = Filter::new();
             let mut is_null = true;
             for (peer_id, filters) in filters.iter() {
-                if ignore_peers.contains(peer_id) {
-                    continue;
-                }
-                if let Some(f) = filters.get(level) {
+                if let Some(f) = filters.get(level-1) {
                     filter.bitor_assign_ref(f);
                     is_null = false;
                 }
             }
             match is_null {
                 true => break,
-                false => {
-                    local_filters.push(filter);
-                    level += 1;
-                }
+                false => our_filters.push(filter),
             }
         }
+    }
 
-        local_filters
+    pub async fn our_filters(&self) -> Vec<Filter<N>> {
+        self.our_filters.read().await.clone()
+    }
+
+    pub(crate) async fn our_filters_bytes(&self) -> Vec<Vec<u8>> {
+        self.our_filters.read().await.iter().map(|f| f.into()).collect()
     }
 
     /// Adds a new address for a peer.

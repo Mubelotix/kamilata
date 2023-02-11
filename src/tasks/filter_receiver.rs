@@ -3,7 +3,7 @@
 use super::*;
 
 pub async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
-    trace!("{our_peer_id} Inbound refresh task executing");
+    trace!("{our_peer_id} Inbound filter refresh task executing");
 
     // Send our refresh request
     let demanded_refresh_packet = RefreshPacket::default(); // TODO: from config

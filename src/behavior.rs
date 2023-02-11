@@ -24,7 +24,7 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
-    ///     none
+    ///     0: our filter updater
     tasks: HashMap<usize, Task>,
 }
 
@@ -32,18 +32,21 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
     pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, D> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
+        let db = Arc::new(Db::new());
+        let mut tasks: HashMap<usize, Task> = HashMap::new();
+        tasks.insert(0, Box::pin(update_our_filters(Arc::clone(&db), our_peer_id)));
 
         KamilataBehavior {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new()),
+            db,
             control_msg_sender,
             control_msg_receiver,
             pending_handler_events: BTreeMap::new(),
             handler_event_queue: Vec::new(),
             rt_handle,
             task_counter: Counter::new(0),
-            tasks: HashMap::new(),
+            tasks,
         }
     }
 

@@ -15,7 +15,7 @@ pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStr
     match request {
         RequestPacket::SetRefresh(refresh_packet) => {
             debug!("{our_peer_id} Received a set refresh request");
-            let task = broadcast_local_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
+            let task = broadcast_our_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::Search(search_packet) => {
