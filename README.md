@@ -1,4 +1,19 @@
-# Kamilata: A Peer-to-Peer Search Engine System
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mubelotix/kamilata/master/.github/logo.png" alt="Kamilata" width="200" height="200" />
+</p>
+
+<h1 align="center">Kamilata</h1>
+
+<p align="center">
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+    <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/Mubelotix/kamilata">
+    <img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/Mubelotix/kamilata?color=%23347d39" alt="last commit badge">
+    <a href="https://wakatime.com/badge/user/6a4c28c6-c833-460a-815e-15ce48b15c25/project/0e6a2208-db21-4763-aff7-35f4abc1773f"><img src="https://wakatime.com/badge/user/6a4c28c6-c833-460a-815e-15ce48b15c25/project/0e6a2208-db21-4763-aff7-35f4abc1773f.svg" alt="wakatime"></a>
+    <img alt="GitHub closed issues" src="https://img.shields.io/github/issues-closed-raw/Mubelotix/kamilata?color=%23347d39" alt="closed issues badge">
+</p>
+
+<p align="center">A Peer-to-Peer Search Engine System</p>
+
 
 ## Abstract
 
