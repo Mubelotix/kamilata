@@ -1,16 +1,16 @@
 mod filter_broadcaster;
-mod handle_request;
+mod request_handler;
 mod filter_receiver;
 mod search;
-mod request;
+mod request_maker;
 mod filter_updater;
 
 pub(self) use crate::prelude::*;
 pub(crate) use filter_broadcaster::*;
-pub(crate) use handle_request::*;
+pub(crate) use request_handler::*;
 pub(crate) use filter_receiver::*;
 pub(crate) use search::*;
-pub(crate) use request::*;
+pub(crate) use request_maker::*;
 pub(crate) use filter_updater::*;
 
 pub type HandlerTask = BoxFuture<'static, HandlerTaskOutput>;
