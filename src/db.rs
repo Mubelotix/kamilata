@@ -4,6 +4,7 @@ use crate::prelude::*;
 pub(crate) struct Db<const N: usize, D: Document<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
+    config: RwLock<KamilataConfig>,
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
@@ -11,9 +12,10 @@ pub(crate) struct Db<const N: usize, D: Document<N>> {
     addr_archives: RwLock<BTreeMap<PeerId, (u64, Vec<Multiaddr>)>>,
 }
 
-impl<const N: usize, D: Document<N>> Default for Db<N, D> {
-    fn default() -> Self {
+impl<const N: usize, D: Document<N>> Db<N, D> {
+    pub fn new(config: KamilataConfig) -> Self {
         Db {
+            config: RwLock::new(config),
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
@@ -21,9 +23,15 @@ impl<const N: usize, D: Document<N>> Default for Db<N, D> {
             addr_archives: RwLock::new(BTreeMap::new()),
         }
     }
-}
 
-impl<const N: usize, D: Document<N>> Db<N, D> {
+    pub async fn get_config(&self) -> KamilataConfig {
+        self.config.read().await.clone()
+    }
+
+    pub async fn set_config(&self, config: KamilataConfig) {
+        *self.config.write().await = config;
+    }
+
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         self.filters.write().await.remove(peer_id);

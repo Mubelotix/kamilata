@@ -30,13 +30,17 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
 
 impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
     pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, D> {
+        Self::new_with_config(our_peer_id, KamilataConfig::default())
+    }
+
+    pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehavior<N, D> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
         KamilataBehavior {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::default()),
+            db: Arc::new(Db::new(config)),
             control_msg_sender,
             control_msg_receiver,
             pending_handler_events: BTreeMap::new(),
@@ -45,6 +49,14 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
             task_counter: Counter::new(0),
             tasks: HashMap::new(),
         }
+    }
+
+    pub async fn get_config(&self) -> KamilataConfig {
+        self.db.get_config().await
+    }
+
+    pub async fn set_config(&self, config: KamilataConfig) {
+        self.db.set_config(config).await
     }
 
     pub async fn insert_document(&self, document: D) {

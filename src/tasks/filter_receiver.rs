@@ -6,7 +6,12 @@ pub(crate) async fn receive_remote_filters<const N: usize, D: Document<N>>(mut s
     trace!("{our_peer_id} Inbound filter refresh task executing");
 
     // Send our refresh request
-    let demanded_refresh_packet = RefreshPacket::default(); // TODO: from config
+    let config = db.get_config().await; // TODO config updates are useless
+    let demanded_refresh_packet = RefreshPacket {
+        range: 10,
+        interval: config.filter_update_delay.target() as u64,
+        blocked_peers: Vec::new(), // TODO
+    };
     stream.start_send_unpin(RequestPacket::SetRefresh(demanded_refresh_packet.clone())).unwrap();
     stream.flush().await.unwrap();
 
@@ -25,11 +30,19 @@ pub(crate) async fn receive_remote_filters<const N: usize, D: Document<N>>(mut s
     let demanded_blocked_peers = demanded_refresh_packet.blocked_peers.to_libp2p_peer_ids();
     for blocked_peer in blocked_peers {
         if !demanded_blocked_peers.contains(&blocked_peer) {
+            error!("{our_peer_id} Couldn't agree with {remote_peer_id} because they unblocked peers");
             return HandlerTaskOutput::Disconnect(DisconnectPacket {
                 reason: String::from("Could not agree on a refresh packet: blocked peer has been unblocked"),
                 try_again_in: Some(86400),
             });
         }
+    }
+    if refresh_packet.interval < config.filter_update_delay.min() as u64 || refresh_packet.interval > config.filter_update_delay.max() as u64 {
+        error!("{our_peer_id} Couldn't agree with {remote_peer_id} because they ask for an interval of {}", refresh_packet.interval);
+        return HandlerTaskOutput::Disconnect(DisconnectPacket {
+            reason: String::from("Could not agree on a refresh packet: refresh interval unacceptable"),
+            try_again_in: Some(86400),
+        });
     }
 
     // Receive filters

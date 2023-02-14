@@ -5,8 +5,9 @@ use super::*;
 pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Outbound filter refresh task executing");
     
+    let config = db.get_config().await;
     refresh_packet.range = refresh_packet.range.clamp(0, 10);
-    refresh_packet.interval = refresh_packet.interval.clamp(15*1000, 5*60*1000); // TODO config
+    refresh_packet.interval = refresh_packet.interval.clamp(config.filter_update_delay.min() as u64, config.filter_update_delay.max() as u64);
 
     stream.start_send_unpin(ResponsePacket::ConfirmRefresh(refresh_packet.clone())).unwrap();
     stream.flush().await.unwrap();
