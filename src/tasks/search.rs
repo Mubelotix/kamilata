@@ -111,32 +111,41 @@ impl ProviderBinaryHeap {
 }
 
 impl<const PRIORITY: usize> ProviderInfo<PRIORITY> {
-    fn min_dist(&self) -> Option<(usize, usize)> {
-        let mut result = None;
+    fn nearest(&self) -> Option<(usize, usize)> {
+        let mut nearest = None;
         for (query, dist) in self.queries.iter().enumerate() {
             if let Some(dist) = dist {
-                match result {
-                    None => result = Some((query, *dist)),
+                match nearest {
+                    None => nearest = Some((query, *dist)),
                     Some((_, min_dist)) => {
                         if *dist < min_dist {
-                            result = Some((query, *dist));
+                            nearest = Some((query, *dist));
                         }
                     }
                 }
             }
         }
-        result
+        nearest
+    }
+
+    fn best(&self) -> Option<(usize, usize)> {
+        for (query, dist) in self.queries.iter().enumerate() {
+            if let Some(dist) = dist {
+                return Some((query, *dist))
+            }
+        }
+        None
     }
 }
 
 impl std::cmp::Ord for ProviderInfo<SPEED> {
     fn cmp(&self, other: &Self) -> Ordering {
-        match (self.min_dist(), other.min_dist()) {
+        match (self.nearest(), other.nearest()) {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some((min_dist, min_dist_query)), Some((other_min_dist, other_min_dist_query))) => match min_dist.cmp(&other_min_dist) {
-                Ordering::Equal => min_dist_query.cmp(&other_min_dist_query).reverse(),
+            (Some((query1, dist1)), Some((query2, dist2))) => match dist1.cmp(&dist2) {
+                Ordering::Equal => query1.cmp(&query2).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
             },
@@ -150,12 +159,12 @@ impl std::cmp::PartialOrd for ProviderInfo<SPEED> {
 
 impl std::cmp::Ord for ProviderInfo<RELEVANCE> {
     fn cmp(&self, other: &Self) -> Ordering {
-        match (self.min_dist(), other.min_dist()) {
+        match (self.best(), other.best()) {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some((min_dist, min_dist_query)), Some((other_min_dist, other_min_dist_query))) => match min_dist_query.cmp(&other_min_dist_query) {
-                Ordering::Equal => min_dist.cmp(&other_min_dist).reverse(),
+            (Some((query1, dist1)), Some((query2, dist2))) => match query1.cmp(&query2) {
+                Ordering::Equal => dist1.cmp(&dist2).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
             },

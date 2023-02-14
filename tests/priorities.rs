@@ -60,7 +60,7 @@ async fn init_network() -> (Movie, Movie, ClientController, ClientController, Cl
 async fn speed_priority() {
     let (doc1, doc2, controller1, _controller2, _controller3, _controller4) = init_network().await;
 
-    info!("Searching...");
+    info!("Searching with speed priority...");
     let results = controller1.search_with_config(
         SearchQueries::from_raw_text_iter(["perfect match", "match"]),
         SearchConfig::default().with_priority(SearchPriority::speed()).with_req_limit(1)
@@ -73,7 +73,7 @@ async fn speed_priority() {
 async fn relevance_priority() {
     let (doc1, doc2, controller1, _controller2, _controller3, _controller4) = init_network().await;
 
-    info!("Searching...");
+    info!("Searching with relevance priority...");
     let results = controller1.search_with_config(
         SearchQueries::from_raw_text_iter(["perfect match", "match"]),
         SearchConfig::default().with_priority(SearchPriority::relevance()).with_req_limit(1)
@@ -81,3 +81,5 @@ async fn relevance_priority() {
     let hits = results.hits.into_iter().map(|h| h.0).collect::<Vec<_>>();
     assert_eq!(hits, vec![doc1, doc2]);
 }
+
+// TODO: test for variable priority
