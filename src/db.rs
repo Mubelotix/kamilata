@@ -157,6 +157,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         let documents = self.documents.read().await;
         documents.values().filter_map(|document| {
             for (query_id, (words, min_matching)) in queries.inner.iter().enumerate() {
+                info!("searching for {:?} in {:?}", words, document.cid());
                 if let Some(search_result) = document.search_result(words, *min_matching) {
                     return Some((search_result, query_id));
                 }

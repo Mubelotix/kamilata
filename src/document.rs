@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 pub trait SearchResult: Send + Sync + std::fmt::Debug + 'static {
     /// CID is required in order to detect duplicates.
-    type Cid: Eq + Ord + Clone + Send + Sync + 'static;
+    type Cid: Eq + Ord + Clone + Send + Sync + 'static + std::fmt::Debug;
 
     fn cid(&self) -> &Self::Cid;
     fn into_bytes(self) -> Vec<u8>;

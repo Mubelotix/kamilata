@@ -7,8 +7,7 @@
 mod common;
 use common::*;
 
-#[tokio::test]
-async fn speed_priority() {
+async fn init_network() -> (Movie, Movie, ClientController, ClientController, ClientController, ClientController) {
     let doc1 = Movie {
         id: 0,
         title: String::from("Perfect match"),
@@ -33,6 +32,10 @@ async fn speed_priority() {
 
     let mut logger = ClientLogger::new();
     logger.with_peer_id(client1.peer_id());
+    logger.with_alias(client1.peer_id(), "client 1");
+    logger.with_alias(client2.peer_id(), "client 2");
+    logger.with_alias(client3.peer_id(), "client 3");
+    logger.with_alias(client4.peer_id(), "client 4");
     logger.activate();
 
     client1.swarm_mut().dial(DialOpts::peer_id(client2.peer_id()).addresses(vec![client2.addr().to_owned()]).build()).unwrap();
@@ -42,15 +45,39 @@ async fn speed_priority() {
     client3.behavior_mut().insert_document(doc1.clone()).await;
     client4.behavior_mut().insert_document(doc2.clone()).await;
 
-    let controler1 = client1.run();
-    let controler2 = client2.run();
-    let controler3 = client3.run();
-    let controler4 = client4.run();
+    let controller1 = client1.run();
+    let controller2 = client2.run();
+    let controller3 = client3.run();
+    let controller4 = client4.run();
 
     info!("Waiting for filters to propagate...");
-    sleep(Duration::from_secs(65)).await;
+    sleep(Duration::from_secs(25)).await;
+
+    (doc1, doc2, controller1, controller2, controller3, controller4)
+}
+
+#[tokio::test]
+async fn speed_priority() {
+    let (doc1, doc2, controller1, _controller2, _controller3, _controller4) = init_network().await;
 
     info!("Searching...");
-    let results = controler1.search(vec!["perfect match", "match"]).await;
-    info!("Results: {:?}", results);
+    let results = controller1.search_with_config(
+        SearchQueries::from_raw_text_iter(["perfect match", "match"]),
+        SearchConfig::default().with_priority(SearchPriority::speed()).with_req_limit(1)
+    ).await;
+    let hits = results.hits.into_iter().map(|h| h.0).collect::<Vec<_>>();
+    assert_eq!(hits, vec![doc2, doc1]);
+}
+
+#[tokio::test]
+async fn relevance_priority() {
+    let (doc1, doc2, controller1, _controller2, _controller3, _controller4) = init_network().await;
+
+    info!("Searching...");
+    let results = controller1.search_with_config(
+        SearchQueries::from_raw_text_iter(["perfect match", "match"]),
+        SearchConfig::default().with_priority(SearchPriority::relevance()).with_req_limit(1)
+    ).await;
+    let hits = results.hits.into_iter().map(|h| h.0).collect::<Vec<_>>();
+    assert_eq!(hits, vec![doc1, doc2]);
 }

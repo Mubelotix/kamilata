@@ -46,6 +46,7 @@ pub enum ClientCommand {
     Search {
         queries: SearchQueries,
         sender: OneshotSender<SearchResults<Movie>>,
+        config: SearchConfig,
     },
 }
 
@@ -54,11 +55,20 @@ pub struct ClientController {
 }
 
 impl ClientController {
-    pub async fn search(&self, query: impl Into<SearchQueries>) -> SearchResults<Movie> {
+    pub async fn search(&self, queries: impl Into<SearchQueries>) -> SearchResults<Movie> {
+        self.search_with_config(queries, SearchConfig::default()).await
+    }
+
+    pub async fn search_with_priority(&self, queries: impl Into<SearchQueries>, priority: SearchPriority) -> SearchResults<Movie> {
+        self.search_with_config(queries, SearchConfig::default().with_priority(priority)).await
+    }
+
+    pub async fn search_with_config(&self, queries: impl Into<SearchQueries>, config: SearchConfig) -> SearchResults<Movie> {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::Search {
-            queries: query.into(),
+            queries: queries.into(),
             sender,
+            config,
         }).await.unwrap();
         receiver.await.unwrap()
     }
@@ -125,8 +135,8 @@ impl Client {
                 let value = futures::future::select(recv, self.swarm.select_next_some()).await;
                 match value {
                     future::Either::Left((Some(command), _)) => match command {
-                        ClientCommand::Search { queries, sender } => {
-                            let mut controler = self.swarm.behaviour_mut().search(queries).await;
+                        ClientCommand::Search { queries, sender, config } => {
+                            let mut controler = self.swarm.behaviour_mut().search_with_config(queries, config).await;
                     
                             tokio::spawn(async move {
                                 let mut hits = Vec::new();

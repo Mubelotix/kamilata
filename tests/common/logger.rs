@@ -5,6 +5,7 @@ pub struct ClientLogger {
     peer_id: Option<String>,
     kam_level: Level,
     other_level: Level,
+    aliases: Vec<(String, String)>,
 }
 
 fn colored_level(level: Level) -> ColoredString {
@@ -23,6 +24,7 @@ impl ClientLogger {
             peer_id: None,
             kam_level: Level::Trace,
             other_level: Level::Info,
+            aliases: Vec::new(),
         })
     }
 
@@ -32,6 +34,10 @@ impl ClientLogger {
 
     pub fn with_level(&mut self, level: Level) {
         self.kam_level = level;
+    }
+
+    pub fn with_alias(&mut self, peer_id: libp2p::PeerId, new_name: impl Into<String>) {
+        self.aliases.push((peer_id.to_string(), new_name.into()));
     }
 
     pub fn activate(self: Box<Self>) {
@@ -63,6 +69,9 @@ impl Log for ClientLogger {
             }
             if target.contains("kamilata") {
                 target = target.replace("kamilata::", "kam::");
+            }
+            for (old_name, new_name) in &self.aliases {
+                args = args.replace(old_name, new_name);
             }
             println!(
                 "[{} {target}] {args}", colored_level(record.level()),

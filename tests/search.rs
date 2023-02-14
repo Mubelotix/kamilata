@@ -49,7 +49,7 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
     // FIXME: This is not enough time to let the filters propagate beyond the very first levels
     
     info!("Searching...");
-    let results = controlers[0].search("hunger").await;
+    let results = controlers[0].search(SearchQueries::from_raw_text("hunger")).await;
     let mut expected = 0;
     let mut missing = Vec::new();
     for movie in movies {
