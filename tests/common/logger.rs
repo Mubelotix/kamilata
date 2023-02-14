@@ -41,8 +41,11 @@ impl ClientLogger {
     }
 
     pub fn activate(self: Box<Self>) {
-        log::set_logger(Box::leak(self)).unwrap();
-        log::set_max_level(LevelFilter::Trace);
+        if log::set_logger(Box::leak(self)).is_err() {
+            println!("Logger already set")
+        } else {
+            log::set_max_level(LevelFilter::Trace);
+        }
     }
 }
 
