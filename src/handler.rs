@@ -44,7 +44,7 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
 }
 
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
-    pub fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
+    pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
         KamilataHandler {
             our_peer_id,

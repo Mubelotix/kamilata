@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 use crate::prelude::*;
 
-pub struct Db<const N: usize, D: Document<N>> {
+pub(crate) struct Db<const N: usize, D: Document<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
@@ -22,6 +22,12 @@ impl<const N: usize, D: Document<N>> Default for Db<N, D> {
 }
 
 impl<const N: usize, D: Document<N>> Db<N, D> {
+    /// Remove data about a peer.
+    pub async fn remove_peer(&self, peer_id: &PeerId) {
+        self.filters.write().await.remove(peer_id);
+        self.addresses.write().await.remove(peer_id);
+    }
+
     /// Inserts a single document to the database.
     /// This will update the root filter without fully recompting it.
     pub async fn insert_document(&self, document: D) {

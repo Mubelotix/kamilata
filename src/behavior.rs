@@ -128,6 +128,10 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                 self.connected_peers.retain(|peer_id| peer_id != &info.peer_id);
                 self.handler_event_queue.retain(|(peer_id, _)| peer_id != &info.peer_id);
                 self.pending_handler_events.remove(&info.peer_id);
+                let db2 = Arc::clone(&self.db);
+                tokio::spawn(async move {
+                    db2.remove_peer(&info.peer_id).await;
+                });
             },
             _ => ()
         }
