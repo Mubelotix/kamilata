@@ -7,23 +7,25 @@ pub struct Db<const N: usize, D: Document<N>> {
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
-    our_filters: RwLock<Vec<Filter<N>>>,
+    root_filter: RwLock<Filter<N>>,
 }
 
-impl<const N: usize, D: Document<N>> Db<N, D> {
-    pub fn new() -> Db<N, D> {
+impl<const N: usize, D: Document<N>> Default for Db<N, D> {
+    fn default() -> Self {
         Db {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
-            our_filters: RwLock::new(vec![Filter::new()]),
+            root_filter: RwLock::new(Filter::new()),
         }
     }
+}
 
+impl<const N: usize, D: Document<N>> Db<N, D> {
     /// Inserts a single document to the database.
     /// This will update the root filter without fully recompting it.
     pub async fn insert_document(&self, document: D) {
-        document.apply_to_filter(self.our_filters.write().await.first_mut().unwrap().deref_mut());
+        document.apply_to_filter(self.root_filter.write().await.deref_mut());
         self.documents.write().await.insert(document.cid().clone(), document);
     }
 
@@ -33,16 +35,16 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
     pub async fn insert_documents(&self, documents: Vec<D>) {
         let new_documents = documents;
         let mut documents = self.documents.write().await;
-        let mut our_root_filter = self.our_filters.write().await;
+        let mut root_filter = self.root_filter.write().await;
         for document in new_documents {
-            document.apply_to_filter(our_root_filter.first_mut().unwrap().deref_mut());
+            document.apply_to_filter(root_filter.deref_mut());
             documents.insert(document.cid().clone(), document);
         }
     }
 
     /// Removes all documents from the database.
     pub async fn clear_documents(&self) {
-        *self.our_filters.write().await.first_mut().unwrap() = Filter::new();
+        *self.root_filter.write().await = Filter::new();
         self.documents.write().await.clear();
     }
 
@@ -73,7 +75,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
                 document.apply_to_filter(&mut new_root_filter);
             }
             drop(documents);
-            *self.our_filters.write().await.first_mut().unwrap() = new_root_filter;
+            *self.root_filter.write().await = new_root_filter;
         }
     }
 
@@ -82,9 +84,9 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         self.filters.write().await.insert(peer_id, filters);
     }
 
-    pub(crate) async fn update_our_filters(&self) {
-        let mut our_filters  = self.our_filters.write().await;
-        our_filters.truncate(1);
+    pub(crate) async fn get_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<N>> {
+        let mut result = Vec::new();
+        result.push(self.root_filter.read().await.clone());
 
         let filters = self.filters.read().await;
         for level in 1..10 {
@@ -98,17 +100,16 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             }
             match is_null {
                 true => break,
-                false => our_filters.push(filter),
+                false => result.push(filter),
             }
         }
+
+        result
     }
 
-    pub async fn our_filters(&self) -> Vec<Filter<N>> {
-        self.our_filters.read().await.clone()
-    }
-
-    pub(crate) async fn our_filters_bytes(&self) -> Vec<Vec<u8>> {
-        self.our_filters.read().await.iter().map(|f| f.into()).collect()
+    pub(crate) async fn get_filters_bytes(&self, ignore_peers: &[PeerId]) -> Vec<Vec<u8>> {
+        let filters = self.get_filters(ignore_peers).await;
+        filters.into_iter().map(|f| <Vec<u8>>::from(&f)).collect()
     }
 
     /// Adds a new address for a peer.

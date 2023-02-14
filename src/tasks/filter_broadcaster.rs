@@ -15,7 +15,7 @@ pub async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut stream: K
     peers_to_ignore.push(remote_peer_id);
 
     loop {
-        let our_filters = db.our_filters_bytes().await;
+        let our_filters = db.get_filters_bytes(&peers_to_ignore).await;
         stream.start_send_unpin(ResponsePacket::UpdateFilters(UpdateFiltersPacket { filters: our_filters })).unwrap();
         stream.flush().await.unwrap();
         trace!("{our_peer_id} Sent filters to {remote_peer_id}");
