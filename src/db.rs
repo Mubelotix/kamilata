@@ -93,6 +93,9 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             let mut filter = Filter::new();
             let mut is_null = true;
             for (peer_id, filters) in filters.iter() {
+                if ignore_peers.contains(peer_id) {
+                    continue;
+                }
                 if let Some(f) = filters.get(level-1) {
                     filter.bitor_assign_ref(f);
                     is_null = false;
