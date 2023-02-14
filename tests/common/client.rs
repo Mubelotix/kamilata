@@ -6,9 +6,8 @@ use tokio::{
     sync::{
         mpsc::*,
         oneshot::{
-            channel as oneshot_channel, Receiver as OneshotReceiver, Sender as OneshotSender,
-        },
-        RwLock,
+            channel as oneshot_channel, Sender as OneshotSender,
+        }
     },
 };
 use futures::StreamExt;
@@ -45,7 +44,7 @@ pub struct Client {
 #[derive(Debug)]
 pub enum ClientCommand {
     Search {
-        query: String,
+        queries: SearchQueries,
         sender: OneshotSender<SearchResults<Movie>>,
     },
 }
@@ -55,10 +54,10 @@ pub struct ClientController {
 }
 
 impl ClientController {
-    pub async fn search(&self, query: impl Into<String>) -> SearchResults<Movie> {
+    pub async fn search(&self, query: impl Into<SearchQueries>) -> SearchResults<Movie> {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::Search {
-            query: query.into(),
+            queries: query.into(),
             sender,
         }).await.unwrap();
         receiver.await.unwrap()
@@ -126,9 +125,8 @@ impl Client {
                 let value = futures::future::select(recv, self.swarm.select_next_some()).await;
                 match value {
                     future::Either::Left((Some(command), _)) => match command {
-                        ClientCommand::Search { query, sender } => {
-                            let words = query.split(' ').filter(|w| w.len() >= 3).map(|w| w.to_string()).collect();
-                            let mut controler = self.swarm.behaviour_mut().search(words).await;
+                        ClientCommand::Search { queries, sender } => {
+                            let mut controler = self.swarm.behaviour_mut().search(queries).await;
                     
                             tokio::spawn(async move {
                                 let mut hits = Vec::new();

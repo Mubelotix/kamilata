@@ -6,6 +6,7 @@ pub use crate::{
     },
     document::*,
     filters::*,
+    queries::*,
 };
 pub(crate) use crate::{
     behavior::*, config::*, control::*, counter::*, db::*, handler::*, handler_proto::*,

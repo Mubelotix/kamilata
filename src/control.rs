@@ -111,7 +111,7 @@ impl Default for SearchConfig {
 }
 
 pub(crate) struct OngoingSearchState {
-    queries: Vec<(Vec<String>, usize)>,
+    queries: SearchQueries,
     config: SearchConfig,
     queried_peers: usize,
     final_peers: usize,
@@ -119,7 +119,7 @@ pub(crate) struct OngoingSearchState {
 }
 
 impl OngoingSearchState {
-    pub(crate) fn new(queries: Vec<(Vec<String>, usize)>, config: SearchConfig) -> OngoingSearchState {
+    pub(crate) fn new(queries: SearchQueries, config: SearchConfig) -> OngoingSearchState {
         OngoingSearchState {
             queries,
             config,
@@ -170,7 +170,7 @@ impl<T: SearchResult> OngoingSearchController<T> {
     }
 
     /// Returns a copy of the ongoing queries.
-    pub async fn queries(&self) -> Vec<(Vec<String>, usize)> {
+    pub async fn queries(&self) -> SearchQueries {
         self.inner.read().await.queries.clone()
     }
 
@@ -219,12 +219,6 @@ impl<T: SearchResult> OngoingSearchController<T> {
         self.inner.read().await.ongoing_queries
     }
 
-    /// Truncates the ongoing queries to only keep the most important ones.
-    /// This is useful when you start having enough relevant results to stop searching for less relevant ones.
-    pub async fn truncate_queries(&self, len: usize) {
-        self.inner.write().await.queries.truncate(len)
-    }
-
     /// Stops the search and returns all search results that have not been consumed yet.
     pub async fn finish(mut self) -> SearchResults<T> {
         let mut search_results = Vec::new();
@@ -249,7 +243,7 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     }
 
     /// Returns a copy of the ongoing queries.
-    pub async fn queries(&self) -> Vec<(Vec<String>, usize)> {
+    pub async fn queries(&self) -> SearchQueries {
         self.inner.read().await.queries.clone()
     }
 

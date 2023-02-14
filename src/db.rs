@@ -152,10 +152,10 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             .collect()
     }
 
-    pub async fn search_local(&self, queries: &Vec<(Vec<String>, usize)>) -> Vec<(D::SearchResult, usize)> {
+    pub async fn search_local(&self, queries: &SearchQueries) -> Vec<(D::SearchResult, usize)> {
         let documents = self.documents.read().await;
         documents.values().filter_map(|document| {
-            for (query_id, (words, min_matching)) in queries.iter().enumerate() {
+            for (query_id, (words, min_matching)) in queries.inner.iter().enumerate() {
                 if let Some(search_result) = document.search_result(words, *min_matching) {
                     return Some((search_result, query_id));
                 }

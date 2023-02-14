@@ -30,7 +30,7 @@ pub async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStr
                 .iter()
                 .map(|q| (q.words.to_owned(), q.min_matching as usize))
                 .collect::<Vec<_>>();
-            let local_matches = db.search_local(&queries).await;
+            let local_matches = db.search_local(&queries.into()).await;
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {

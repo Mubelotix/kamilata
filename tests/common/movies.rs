@@ -2,12 +2,12 @@ use super::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Movie {
-    id: usize,
-    title: String,
-    overview: String,
-    genres: Vec<String>,
-    poster: String,
-    release_date: i64,
+    pub id: usize,
+    pub title: String,
+    pub overview: String,
+    pub genres: Vec<String>,
+    pub poster: String,
+    pub release_date: i64,
 }
 
 impl Movie {
@@ -93,4 +93,21 @@ impl<const N: usize> WordHasher<N> for WordHasherImpl<N> {
         }
         result % (N * 8)
     }
+}
+
+pub fn get_movies() -> Vec<Movie> {
+    let data = match std::fs::read_to_string("movies.json") {
+        Ok(data) => data,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::process::Command::new("sh")
+                .arg("-c")
+                .arg("wget https://docs.meilisearch.com/movies.json")
+                .output()
+                .expect("failed to download movies.json");
+            std::fs::read_to_string("movies.json").unwrap()
+        },
+        e => e.unwrap(),
+    };
+
+    serde_json::from_str::<Vec<Movie>>(&data).unwrap()
 }

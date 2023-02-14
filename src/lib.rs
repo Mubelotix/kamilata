@@ -10,3 +10,4 @@ pub(crate) mod handler_proto;
 pub(crate) mod packets;
 pub mod prelude;
 pub(crate) mod tasks;
+pub mod queries;

@@ -3,31 +3,13 @@
 mod common;
 use common::*;
 
-use kamilata::prelude::*;
-use log::*;
-use libp2p::swarm::dial_opts::DialOpts;
-use tokio::time::sleep;
-use std::time::Duration;
-
 const NODE_COUNT: usize = 60;
 
 #[tokio::test]
 #[ignore]
 async fn search() -> Result<(), Box<dyn std::error::Error>> {
     info!("Reading data...");
-    let data = match std::fs::read_to_string("movies.json") {
-        Ok(data) => data,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            std::process::Command::new("sh")
-                .arg("-c")
-                .arg("wget https://docs.meilisearch.com/movies.json")
-                .output()
-                .expect("failed to download movies.json");
-            std::fs::read_to_string("movies.json").unwrap()
-        },
-        e => e.unwrap(),
-    };
-    let movies = serde_json::from_str::<Vec<Movie>>(&data).unwrap();
+    let movies = get_movies();
 
     info!("Initializing clients...");
     let mut clients = Vec::new();

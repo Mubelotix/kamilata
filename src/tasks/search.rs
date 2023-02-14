@@ -173,7 +173,7 @@ struct QueryResult<S: SearchResult> {
 }
 
 async fn search_one<const N: usize, D: Document<N>>(
-    queries: Vec<(Vec<String>, usize)>,
+    queries: SearchQueries,
     behavior_controller: BehaviourController,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
@@ -183,7 +183,7 @@ async fn search_one<const N: usize, D: Document<N>>(
 
     // Dial the peer, orders the handle to request it, and wait for the response
     let request = RequestPacket::Search(SearchPacket {
-        queries: queries.into_iter().map(|(words, min_matching)| Query {
+        queries: queries.inner.into_iter().map(|(words, min_matching)| Query {
             words,
             min_matching: min_matching as u16
         }).collect()
@@ -246,6 +246,7 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
         search_follower.send((result, query, our_peer_id)).await.unwrap();
     }
     let queries_hashed = queries
+        .inner
         .clone()
         .into_iter()
         .map(|(words, n)| (
