@@ -13,8 +13,8 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Initializing clients...");
     let mut clients = Vec::new();
-    for i in 0..NODE_COUNT {
-        let client = Client::init(i).await;
+    for _ in 0..NODE_COUNT {
+        let client = Client::init().await;
         clients.push(client);
     }
 

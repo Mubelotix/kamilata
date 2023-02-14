@@ -75,7 +75,7 @@ impl ClientController {
 }
 
 impl Client {
-    pub async fn init(n: usize) -> Self {
+    pub async fn init() -> Self {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
@@ -90,16 +90,22 @@ impl Client {
     
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
     
-        // Tell the swarm to listen on all interfaces and a random, OS-assigned
-        // port.
-        let addr: Multiaddr = format!("/memory/{n}").parse().unwrap();
-        swarm.listen_on(addr.clone()).unwrap();
+        // Tell the swarm to listen on all interfaces and a random, OS-assigned port.
+        let mut addr: Option<Multiaddr> = None;
+        for _ in 0..10 {
+            let n: usize = rand::random();
+            let addr2: Multiaddr = format!("/memory/{n}").parse().unwrap();
+            if swarm.listen_on(addr2.clone()).is_ok() {
+                addr = Some(addr2);
+                break;
+            }
+        }
     
         Client {
             local_key,
             local_peer_id,
             swarm,
-            addr,
+            addr: addr.expect("Failed to listen on any addr"),
         }
     }
 

@@ -25,10 +25,10 @@ async fn init_network() -> (Movie, Movie, ClientController, ClientController, Cl
         release_date: 0,
     };
 
-    let mut client1 = Client::init(1).await; // Connected to 2 and 4
-    let mut client2 = Client::init(2).await; // Connected to 1 and 3
-    let mut client3 = Client::init(3).await; // Distance from 1: 2
-    let mut client4 = Client::init(4).await; // Distance from 1: 1
+    let mut client1 = Client::init().await; // Connected to 2 and 4
+    let mut client2 = Client::init().await; // Connected to 1 and 3
+    let mut client3 = Client::init().await; // Distance from 1: 2
+    let mut client4 = Client::init().await; // Distance from 1: 1
 
     let mut logger = ClientLogger::new();
     logger.with_peer_id(client1.peer_id());
