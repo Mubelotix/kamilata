@@ -1,6 +1,6 @@
 pub use crate::{
     behavior::KamilataBehavior,
-    config::KamilataProtocolConfig,
+    config::*,
     control::{
         FixedSearchPriority, OngoingSearchController, SearchConfig, SearchPriority, SearchResults,
     },
@@ -9,7 +9,7 @@ pub use crate::{
     queries::*,
 };
 pub(crate) use crate::{
-    behavior::*, config::*, control::*, counter::*, db::*, handler::*, handler_proto::*,
+    behavior::*, control::*, counter::*, db::*, handler::*, handler_proto::*,
     packets::*, tasks::*,
 };
 pub(crate) use futures::future::BoxFuture;

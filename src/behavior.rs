@@ -98,10 +98,6 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
     }
 
-    fn inject_event(&mut self, _peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        match event {}
-    }
-
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
             FromSwarm::ConnectionEstablished(info) => {
