@@ -9,7 +9,6 @@ pub(crate) struct Db<const N: usize, D: Document<N>> {
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
     root_filter: RwLock<Filter<N>>,
-    addr_archives: RwLock<BTreeMap<PeerId, (u64, Vec<Multiaddr>)>>,
 }
 
 impl<const N: usize, D: Document<N>> Db<N, D> {
@@ -20,7 +19,6 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
             root_filter: RwLock::new(Filter::new()),
-            addr_archives: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -35,11 +33,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         self.filters.write().await.remove(peer_id);
-        let addresses = self.addresses.write().await.remove(peer_id);
-        if let Some(addresses) = addresses {
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-            self.addr_archives.write().await.insert(*peer_id, (now, addresses));
-        }
+        self.addresses.write().await.remove(peer_id);
     }
 
     /// Inserts a single document to the database.
