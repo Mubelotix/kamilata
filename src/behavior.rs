@@ -5,6 +5,16 @@ use crate::prelude::*;
 pub enum KamilataEvent {}
 
 /// The [KamilataBehavior] is responsible for upkeeping a strong connection to the network and coordinating the [KamilataHandler]s.
+/// 
+/// # Peer Discovery
+/// 
+/// Kamilata will attempt to maintain a consistent pool of connected peers.
+/// However, it doesn't reimplement the capabilities of libp2p's [Identify](libp2p::identify::Behaviour).
+/// As a result, Kamilata only infers listen addresses of the peers we successfully dialed.
+/// **It is therefore recommended to use libp2p's [Identify](libp2p::identify::Behaviour) in conjunction with Kamilata.**
+/// The identify events should be passed to [KamilataBehavior::add_adress].
+/// If you choose not to use libp2p's [Identify](libp2p::identify::Behaviour), incoming connections will be accepted but we won't be able to relay queries to them.
+/// This is the same approach as [libp2p::Kademlia](libp2p::kad::Kademlia).
 pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
