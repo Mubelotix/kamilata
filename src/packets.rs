@@ -1,4 +1,5 @@
 use protocol_derive::Protocol;
+use crate::config::MinTargetMax;
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -58,11 +59,12 @@ impl HackTraitVecPeerId for Vec<PeerId> {
 
 #[derive(Protocol, Debug, Clone)]
 pub enum RequestPacket {
-    /// Nodes automatically notify their peers of their filter changes using the [ResponsePacket::UpdateFilters] packet.
-    /// The [RequestPacket::SetRefresh] packet is used to specify what information we want to receive from our peers (and how often).
-    /// This packet also marks the used substream as the substream on which all the updates will be sent.
-    /// This receiver will instantly reply to this request using a [ResponsePacket::ConfirmRefresh] packet.
-    SetRefresh(RefreshPacket),
+    /// Request the peer to send us its filters.
+    /// The peer accepts by continuously sending [ResponsePacket::UpdateFilters], or closes the channel.
+    GetFilters(GetFiltersPacket),
+    /// Invitation to send a [GetFilters](RequestPacket::GetFilters) request.
+    /// If the peer accepts, it shouldn't reply with a [ResponsePacket]. It should instead issue a [RequestPacket::GetFilters] packet.
+    PostFilters,
     /// Asks to apply our query on its documents and return results in the [ResponsePacket::ReturnResults] packet.
     Search(SearchPacket),
 
@@ -70,23 +72,24 @@ pub enum RequestPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct RefreshPacket {
-    /// Which filters we want to receive.
-    /// The farthest filter will be at a distance of `range`.
-    /// The closest filter will always be 0 so the number of filters will be `range + 1`.
-    pub range: u8,
-    /// Milliseconds between each update.
-    /// This does not force packets to be sent as they will still wait for the filters to change before updating them.
-    pub interval: u64,
-    /// Peers we don't want to hear from because we think they are malicious.
+pub struct GetFiltersPacket {
+    /// Number of filters to send, from level-0 filter to level-`filter_count-1` filter
+    pub filter_count: u8,
+    /// Milliseconds between each update
+    pub interval: MinTargetMax,
+    /// Peers we don't want to hear from
     pub blocked_peers: Vec<PeerId>,
 }
 
-impl Default for RefreshPacket {
+impl Default for GetFiltersPacket {
     fn default() -> Self {
-        RefreshPacket {
-            range: 6,
-            interval: 21 * 1000,
+        GetFiltersPacket {
+            filter_count: 6,
+            interval: MinTargetMax {
+                min: 15_000,
+                target: 21_000,
+                max: 60_000,
+            },
             blocked_peers: Vec::new(),
         }
     }
@@ -112,11 +115,6 @@ pub struct SearchPacket {
 
 #[derive(Protocol, Debug, Clone)]
 pub enum ResponsePacket {
-    /// Response to a [RequestPacket::SetRefresh] packet.
-    /// The inner packets can differ if the demanded settings are deemed unacceptable by the responder.
-    /// The responder has the final say on the settings.
-    /// The requester should disconnect if the peers cannot agree.
-    ConfirmRefresh(RefreshPacket),
     /// Sent periodically to inform the peers of our filters.
     UpdateFilters(UpdateFiltersPacket),
     /// Response to a [RequestPacket::Search] packet.

@@ -12,14 +12,18 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
         None => return HandlerTaskOutput::None,
     };
 
+    debug!("{our_peer_id} Received a request: {request:?}");
     match request {
-        RequestPacket::SetRefresh(refresh_packet) => {
-            debug!("{our_peer_id} Received a set refresh request");
+        RequestPacket::GetFilters(refresh_packet) => {
             let task = broadcast_our_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
+        RequestPacket::PostFilters => {
+            // TODO: case if peer is already an inbound routing peer
+            let task = pending_receive_remote_filters(db, our_peer_id, remote_peer_id);
+            todo!()
+        }
         RequestPacket::Search(search_packet) => {
-            debug!("{our_peer_id} Received a search request");
             let hashed_queries = search_packet.queries
                 .iter()
                 .map(|q| (q.words.iter().map(|w| D::WordHasher::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))

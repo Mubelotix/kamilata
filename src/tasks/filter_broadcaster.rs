@@ -2,17 +2,20 @@
 
 use super::*;
 
-pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut refresh_packet: RefreshPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut req: GetFiltersPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Outbound filter refresh task executing");
     
     let config = db.get_config().await;
-    refresh_packet.range = refresh_packet.range.clamp(0, 10);
-    refresh_packet.interval = refresh_packet.interval.clamp(config.filter_update_delay.min() as u64, config.filter_update_delay.max() as u64);
+    req.filter_count = req.filter_count.clamp(0, config.filter_count as u8); // unsafe cast
+    let interval = match config.get_filters_interval.intersection(&req.interval) {
+        Some(interval) => interval.target() as u64,
+        None => {
+            warn!("{our_peer_id} Couldn't agree on interval with {remote_peer_id} (ours: {:?}, theirs: {:?})", config.get_filters_interval, req.interval);
+            return HandlerTaskOutput::None;
+        }
+    };
 
-    stream.start_send_unpin(ResponsePacket::ConfirmRefresh(refresh_packet.clone())).unwrap();
-    stream.flush().await.unwrap();
-
-    let mut peers_to_ignore = refresh_packet.blocked_peers.to_libp2p_peer_ids();
+    let mut peers_to_ignore = req.blocked_peers.to_libp2p_peer_ids();
     peers_to_ignore.push(remote_peer_id);
 
     loop {
@@ -21,6 +24,6 @@ pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut st
         stream.flush().await.unwrap();
         trace!("{our_peer_id} Sent filters to {remote_peer_id}");
 
-        sleep(Duration::from_millis(refresh_packet.interval)).await;
+        sleep(Duration::from_millis(interval)).await;
     }
 }

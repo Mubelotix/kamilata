@@ -1,60 +1,70 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, protocol::Protocol)]
 pub struct MinTargetMax {
-    min: usize,
-    target: usize,
-    max: usize,
+    pub(crate) min: u64,
+    pub(crate) target: u64,
+    pub(crate) max: u64,
 }
 
 impl MinTargetMax {
     pub fn set_min(&mut self, min: usize) {
-        self.min = min;
-        if self.target < min {
-            self.target = min;
+        self.min = min as u64;
+        if self.target < self.min {
+            self.target = self.min;
         }
-        if self.max < min {
-            self.max = min;
+        if self.max < self.min {
+            self.max = self.min;
         }
     }
 
     pub fn min(&self) -> usize {
-        self.min
+        self.min as usize
     }
 
     pub fn set_max(&mut self, max: usize) {
-        self.max = max;
-        if self.target > max {
-            self.target = max;
+        self.max = max as u64;
+        if self.target > self.max {
+            self.target = self.max;
         }
-        if self.min > max {
-            self.min = max;
+        if self.min > self.max {
+            self.min = self.max;
         }
     }
 
     pub fn max(&self) -> usize {
-        self.max
+        self.max as usize
     }
 
     pub fn set_target(&mut self, target: usize) {
-        self.target = target;
-        if self.min > target {
-            self.min = target;
+        self.target = target as u64;
+        if self.min > self.target {
+            self.min = self.target;
         }
-        if self.max < target {
-            self.max = target;
+        if self.max < self.target {
+            self.max = self.target;
         }
     }
 
     pub fn target(&self) -> usize {
-        self.target
+        self.target as usize
+    }
+
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        let min = self.min.max(other.min);
+        let max = self.max.min(other.max);
+        if max < min {
+            return None;
+        }
+        let target = ((self.target + other.target) / 2).clamp(min, max);
+        Some(Self { min, target, max })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct KamilataConfig {
     /// Min, target and max values in milliseconds
-    pub filter_update_delay: MinTargetMax,
+    pub get_filters_interval: MinTargetMax,
     /// Maximum number of filters to manage per peer (default: 8)
-    pub max_filter_levels: usize,
+    pub filter_count: usize,
     /// Number of peers we receive filters from (default: 3,8,20)
     /// 
     /// New peers will automatically be dialed until the `min` value is reached.
@@ -74,8 +84,8 @@ pub struct KamilataConfig {
 impl Default for KamilataConfig {
     fn default() -> Self {
         Self {
-            filter_update_delay: MinTargetMax { min: 15_000, target: 20_000, max: 60_000*3 },
-            max_filter_levels: 8,
+            get_filters_interval: MinTargetMax { min: 15_000, target: 20_000, max: 60_000*3 },
+            filter_count: 8,
             in_routing_peers: MinTargetMax { min: 3, target: 6, max: 20 },
             out_routing_peers: MinTargetMax { min: 3, target: 12, max: 50 },
         }

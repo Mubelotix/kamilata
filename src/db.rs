@@ -53,7 +53,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
     }
 
     /// Sets a peer as a out_routing_peer
-    pub(crate) async fn add_out_routing_peer(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
+    pub async fn add_out_routing_peer(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
         let config = self.config.read().await;
         let mut out_routing_peers = self.out_routing_peers.write().await;
         if out_routing_peers.len() < config.out_routing_peers.max() {
