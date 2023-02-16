@@ -1,13 +1,19 @@
-use std::ops::DerefMut;
+use std::{ops::DerefMut, collections::BTreeSet};
 use crate::prelude::*;
 
 pub(crate) struct Db<const N: usize, D: Document<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
     config: RwLock<KamilataConfig>,
+    /// Documents to add in the global network corpus
     documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
+    /// Filters received from other peers
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
+    /// Peers we send filters to
+    out_routing_peers: RwLock<BTreeSet<PeerId>>,
+    /// Known addresses of peers that are connected to us
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
+    /// Our level-0 filter, based on the [documents](Db::documents) we have
     root_filter: RwLock<Filter<N>>,
 }
 
@@ -18,6 +24,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
+            out_routing_peers: RwLock::new(BTreeSet::new()),
             root_filter: RwLock::new(Filter::new()),
         }
     }
@@ -30,10 +37,31 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         *self.config.write().await = config;
     }
 
+    pub async fn in_routing_peers(&self) -> usize {
+        self.filters.read().await.len()
+    }
+
+    pub async fn out_routing_peers(&self) -> usize {
+        self.out_routing_peers.read().await.len()
+    }
+
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         self.filters.write().await.remove(peer_id);
         self.addresses.write().await.remove(peer_id);
+        self.out_routing_peers.write().await.remove(peer_id);
+    }
+
+    /// Sets a peer as a out_routing_peer
+    pub(crate) async fn add_out_routing_peer(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
+        let config = self.config.read().await;
+        let mut out_routing_peers = self.out_routing_peers.write().await;
+        if out_routing_peers.len() < config.out_routing_peers.max() {
+            out_routing_peers.insert(peer_id);
+            Ok(())
+        } else {
+            Err(TooManyOutRoutingPeers{})
+        }
     }
 
     /// Inserts a single document to the database.
@@ -183,3 +211,6 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         }).collect()
     }
 }
+
+/// Error returned when we try to add a new outgoing routing peer but there are already too many.
+pub struct TooManyOutRoutingPeers {}
