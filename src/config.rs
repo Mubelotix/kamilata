@@ -1,8 +1,10 @@
 pub enum MinTargetMaxState {
     UnderMin,
+    Min,
     UnderTarget,
     Target,
     OverTarget,
+    Max,
     OverMax,
 }
 
@@ -70,12 +72,16 @@ impl MinTargetMax {
         let value = value as u64;
         if value < self.min {
             MinTargetMaxState::UnderMin
+        } else if value == self.min {
+            MinTargetMaxState::Min
         } else if value < self.target {
             MinTargetMaxState::UnderTarget
         } else if value == self.target {
             MinTargetMaxState::Target
         } else if value < self.max {
             MinTargetMaxState::OverTarget
+        } else if value == self.max {
+            MinTargetMaxState::Max
         } else {
             MinTargetMaxState::OverMax
         }
