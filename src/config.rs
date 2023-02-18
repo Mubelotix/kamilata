@@ -1,3 +1,11 @@
+pub enum MinTargetMaxState {
+    UnderMin,
+    UnderTarget,
+    Target,
+    OverTarget,
+    OverMax,
+}
+
 #[derive(Debug, Clone, protocol::Protocol)]
 pub struct MinTargetMax {
     pub(crate) min: u64,
@@ -56,6 +64,21 @@ impl MinTargetMax {
         }
         let target = ((self.target + other.target) / 2).clamp(min, max);
         Some(Self { min, target, max })
+    }
+
+    pub fn state(&self, value: usize) -> MinTargetMaxState {
+        let value = value as u64;
+        if value < self.min {
+            MinTargetMaxState::UnderMin
+        } else if value < self.target {
+            MinTargetMaxState::UnderTarget
+        } else if value == self.target {
+            MinTargetMaxState::Target
+        } else if value < self.max {
+            MinTargetMaxState::OverTarget
+        } else {
+            MinTargetMaxState::OverMax
+        }
     }
 }
 

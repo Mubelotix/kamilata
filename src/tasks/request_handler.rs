@@ -20,7 +20,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
         },
         RequestPacket::PostFilters => {
             // TODO: case if peer is already an inbound routing peer
-            let task = pending_receive_remote_filters(db, our_peer_id, remote_peer_id);
+            let task = pending_post_filters(db, our_peer_id, remote_peer_id);
             todo!()
         }
         RequestPacket::Search(search_packet) => {

@@ -45,20 +45,15 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
     pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
-        let mut pending_tasks = Vec::new();
+        let task_counter = Counter::new(1);
+        let mut tasks: HashMap<u32, HandlerTask> = HashMap::new();
+        let pending_tasks = Vec::new();
 
-        let pending_task = pending_receive_remote_filters(Arc::clone(&db), our_peer_id, remote_peer_id);
-        trace!("{our_peer_id} Requesting an outbound substream for requesting inbound refreshes");
-        pending_tasks.push(pending_task);
+        let init_routing_task = init_routing(Arc::clone(&db), our_peer_id, remote_peer_id);
+        tasks.insert(task_counter.next(), Box::pin(init_routing_task));
 
         KamilataHandler {
-            our_peer_id,
-            remote_peer_id,
-            db,
-            rt_handle,
-            task_counter: Counter::new(1),
-            tasks: HashMap::new(),
-            pending_tasks
+            our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
         }
     }
 }
@@ -157,20 +152,26 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
                     trace!("{} Task {tid} completed!", self.our_peer_id);
                     self.tasks.remove(&tid);
 
-                    match output {
-                        HandlerTaskOutput::SetOutboundRefreshTask(mut outbound_refresh_task) => {
-                            trace!("{} outbound refresh task set", self.our_peer_id);
-                            outbound_refresh_task.poll_unpin(cx); // TODO should be used
-                            self.tasks.insert(0, outbound_refresh_task);
-                        },
-                        HandlerTaskOutput::Disconnect(disconnect_packet) => {
-                            debug!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
-                            // TODO: send packet
-                            return Poll::Ready(ConnectionHandlerEvent::Close(
-                                ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
-                            ));
-                        },
-                        HandlerTaskOutput::None => (),
+                    for output in output.into_vec() {
+                        match output {
+                            HandlerTaskOutput::SetOutboundRefreshTask(mut outbound_refresh_task) => {
+                                trace!("{} outbound refresh task set", self.our_peer_id);
+                                outbound_refresh_task.poll_unpin(cx); // TODO should be used
+                                self.tasks.insert(0, outbound_refresh_task);
+                            },
+                            HandlerTaskOutput::NewPendingTask(pending_task) => {
+                                trace!("{} new pending task", self.our_peer_id);
+                                self.pending_tasks.push(pending_task);
+                            },
+                            HandlerTaskOutput::Disconnect(disconnect_packet) => {
+                                debug!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
+                                // TODO: send packet
+                                return Poll::Ready(ConnectionHandlerEvent::Close(
+                                    ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
+                                ));
+                            },
+                            HandlerTaskOutput::None | HandlerTaskOutput::Many(_) => unreachable!(),
+                        }
                     }
                 }
                 Poll::Pending => ()
