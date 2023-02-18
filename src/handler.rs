@@ -31,7 +31,6 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     remote_peer_id: PeerId,
     db: Arc<Db<N, D>>,
 
-    first_poll: bool,
     rt_handle: tokio::runtime::Handle,
     
     task_counter: Counter,
@@ -46,15 +45,20 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
     pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
+        let mut pending_tasks = Vec::new();
+
+        let pending_task = pending_receive_remote_filters(Arc::clone(&db), our_peer_id, remote_peer_id);
+        trace!("{our_peer_id} Requesting an outbound substream for requesting inbound refreshes");
+        pending_tasks.push(pending_task);
+
         KamilataHandler {
             our_peer_id,
             remote_peer_id,
             db,
-            first_poll: true,
             rt_handle,
             task_counter: Counter::new(1),
             tasks: HashMap::new(),
-            pending_tasks: Vec::new(),
+            pending_tasks
         }
     }
 }
@@ -136,14 +140,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         // It seems this method gets called in a context where the tokio runtime does not exist.
         // We import that runtime so that we can rely on it.
         let _rt_enter_guard = self.rt_handle.enter();
-
-        if self.first_poll {
-            self.first_poll = false;
-
-            let pending_task = pending_receive_remote_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
-            trace!("{} Requesting an outbound substream for requesting inbound refreshes", self.our_peer_id);
-            self.pending_tasks.push(pending_task);
-        }
 
         if let Some(pending_task) = self.pending_tasks.pop() {
             // TODO it is assumed that it cannot fail. Is this correct?
