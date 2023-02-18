@@ -3,8 +3,15 @@
 use super::*;
 
 pub(crate) async fn broadcast_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut req: GetFiltersPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
-    trace!("{our_peer_id} Outbound filter refresh task executing");
+    trace!("{our_peer_id} Broadcast filters task executing");
     
+    // Add remote peer to the out_routing_peers list
+    if let Err(e) = db.add_out_routing_peer(remote_peer_id).await {
+        warn!("{our_peer_id} Couldn't add {remote_peer_id} to out routing peers: {e:?}");
+        return HandlerTaskOutput::None;
+    }
+
+    // Determine an interval
     let config = db.get_config().await;
     req.filter_count = req.filter_count.clamp(0, config.filter_count as u8); // unsafe cast
     let interval = match config.get_filters_interval.intersection(&req.interval) {

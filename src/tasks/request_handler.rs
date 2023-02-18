@@ -18,7 +18,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
             let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetTask {
                 tid: 0,
-                task: HandlerTask { fut: Box::pin(task), name: "get_filters" },
+                task: HandlerTask { fut: Box::pin(task), name: "broadcast_filters" },
             }
         },
         RequestPacket::PostFilters => {

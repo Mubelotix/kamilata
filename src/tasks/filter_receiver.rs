@@ -20,18 +20,18 @@ pub(crate) async fn get_filters<const N: usize, D: Document<N>>(mut stream: KamO
         let packet = match stream.next().await {
             Some(Ok(packet)) => packet,
             Some(Err(e)) => {
-                error!("{our_peer_id} Error while receiving filters from {remote_peer_id}: {e}");
+                warn!("{our_peer_id} Error while receiving filters from {remote_peer_id}: {e}");
                 return HandlerTaskOutput::None;
             }
             None => {
-                error!("{our_peer_id} End of stream while receiving filters from {remote_peer_id}");
+                warn!("{our_peer_id} Get filters was denied by {remote_peer_id}");
                 return HandlerTaskOutput::None;
             }
         };
         let packet = match packet {
             ResponsePacket::UpdateFilters(packet) => packet,
             _ => {
-                error!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for filters");
+                warn!("{our_peer_id} Received unexpected packet from {remote_peer_id} while waiting for filters");
                 return HandlerTaskOutput::None;
             },
         };

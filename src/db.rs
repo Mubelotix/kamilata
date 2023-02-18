@@ -212,4 +212,5 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
 }
 
 /// Error returned when we try to add a new outgoing routing peer but there are already too many.
+#[derive(Debug, Clone)]
 pub struct TooManyOutRoutingPeers {}
