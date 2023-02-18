@@ -93,7 +93,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
         pending_task: Self::OutboundOpenInfo,
     ) {
-        trace!("{} Established outbound channel with {} for {} task", self.our_peer_id, self.remote_peer_id, pending_task.name);
         let fut = (pending_task.fut)(substream, pending_task.params);
         self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: pending_task.name });
     }
@@ -102,7 +101,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     fn inject_event(&mut self, event: Self::InEvent) {
         match event {
             HandlerInEvent::Request { request, sender } => {
-                trace!("{} Requesting an outbound substream for request from behavior", self.our_peer_id);
                 let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push(pending_task);
             },

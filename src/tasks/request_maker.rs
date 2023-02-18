@@ -9,6 +9,8 @@ pub async fn request<const N: usize, D: Document<N>>(
     our_peer_id: PeerId,
     remote_peer_id: PeerId
 ) -> HandlerTaskOutput {
+    trace!("{our_peer_id} Sending request to {remote_peer_id}: {request:?}");
+
     // Send request packet
     match stream.start_send_unpin(request) {
         Ok(()) => (),
@@ -27,8 +29,8 @@ pub async fn request<const N: usize, D: Document<N>>(
     // Receive response packet
     let packet = match stream.next().await {
         Some(Ok(packet)) => packet,
-        _ => {
-            warn!("{our_peer_id} Error while receiving response from {remote_peer_id}: stream closed");
+        w => {
+            warn!("{our_peer_id} Error while receiving response from {remote_peer_id}: stream closed {w:?}");
             let _ = sender.send(None);
             return HandlerTaskOutput::None;
         }

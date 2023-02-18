@@ -12,7 +12,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
         None => return HandlerTaskOutput::None,
     };
 
-    debug!("{our_peer_id} Received a request: {request:?}");
+    debug!("{our_peer_id} Request from {remote_peer_id}: {request:?}");
     match request {
         RequestPacket::GetFilters(refresh_packet) => {
             let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
@@ -65,6 +65,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
                 }).collect()
             })).unwrap();
             stream.flush().await.unwrap();
+            trace!("{our_peer_id} Sent the data to {remote_peer_id}.");
 
             HandlerTaskOutput::None
         },
