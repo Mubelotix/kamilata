@@ -32,7 +32,6 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     db: Arc<Db<N, D>>,
 
     rt_handle: tokio::runtime::Handle,
-    waker: Option<Waker>,
     
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
@@ -54,14 +53,7 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
         tasks.insert(task_counter.next(), HandlerTask { fut: Box::pin(init_routing_fut), name: "init_routing" });
 
         KamilataHandler {
-            waker: None,
             our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
-        }
-    }
-
-    pub(crate) fn wake(&self) {
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
         }
     }
 }
@@ -93,7 +85,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         // TODO: prevent DoS
         let fut = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
         self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: "handle_request" });
-        self.wake();
     }
 
     // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
@@ -105,7 +96,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         trace!("{} Established outbound channel with {} for {} task", self.our_peer_id, self.remote_peer_id, pending_task.name);
         let fut = (pending_task.fut)(substream, pending_task.params);
         self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: pending_task.name });
-        self.wake();
     }
 
     // Events are sent by the Behavior which we need to obey to.
@@ -115,7 +105,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
                 trace!("{} Requesting an outbound substream for request from behavior", self.our_peer_id);
                 let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push(pending_task);
-                self.wake();
             },
         };
     }
@@ -146,7 +135,6 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         // It seems this method gets called in a context where the tokio runtime does not exist.
         // We import that runtime so that we can rely on it.
         let _rt_enter_guard = self.rt_handle.enter();
-        self.waker = Some(cx.waker().to_owned());
 
         // Poll tasks
         for tid in self.tasks.keys().copied().collect::<Vec<u32>>() {
@@ -189,6 +177,8 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
             })
         }
 
+        // It seems we don't have to care about waking up the handler because libp2p does it when inject methods are called.
+        // A link to documentation would be appreciated.
         Poll::Pending
     }
 }
