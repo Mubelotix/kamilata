@@ -45,6 +45,7 @@ pub(crate) fn post_filters_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, 
 pub(crate) fn pending_post_filters(our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
     PendingHandlerTask {
         params: Box::new((our_peer_id, remote_peer_id)),
-        fut: post_filters_boxed
+        fut: post_filters_boxed,
+        name: "post_filters",
     }
 }

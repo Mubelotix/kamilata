@@ -56,7 +56,8 @@ pub fn pending_request<const N: usize, D: Document<N>>(
 ) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
     PendingHandlerTask {
         params: Box::new((request, sender, our_peer_id, remote_peer_id)),
-        fut: request_boxed::<N, D>
+        fut: request_boxed::<N, D>,
+        name: "request",
     }
 }
 

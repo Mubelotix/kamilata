@@ -13,20 +13,27 @@ pub(crate) use search::*;
 pub(crate) use request_maker::*;
 pub(crate) use routing_init::*;
 
-pub type HandlerTask = BoxFuture<'static, HandlerTaskOutput>;
+pub struct HandlerTask {
+    pub fut: BoxFuture<'static, HandlerTaskOutput>,
+    pub name: &'static str,
+}
 
 /// Task owned and ran by an [handler](ConnectionHandler)
 pub struct PendingHandlerTask<T> {
     pub params: T,
     #[allow(clippy::type_complexity)]
-    pub fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> HandlerTask
+    pub fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> BoxFuture<'static, HandlerTaskOutput>,
+    pub name: &'static str,
 }
 
 /// Output of a [HandlerTask]
 pub enum HandlerTaskOutput {
     None,
     Disconnect(DisconnectPacket),
-    SetOutboundRefreshTask(HandlerTask),
+    SetTask {
+        tid: u32,
+        task: HandlerTask,
+    },
     NewPendingTask(PendingHandlerTask<Box<dyn std::any::Any + Send>>),
     Many(Vec<HandlerTaskOutput>),
 }
@@ -36,7 +43,7 @@ impl HandlerTaskOutput {
         match self {
             HandlerTaskOutput::None => Vec::new(),
             HandlerTaskOutput::Disconnect(_) => vec![self],
-            HandlerTaskOutput::SetOutboundRefreshTask(_) => vec![self],
+            HandlerTaskOutput::SetTask {..} => vec![self],
             HandlerTaskOutput::NewPendingTask(_) => vec![self],
             HandlerTaskOutput::Many(outputs) => outputs,
         }
@@ -50,4 +57,3 @@ pub type Task = Pin<Box<dyn Future<Output = TaskOutput> + Send + Sync + 'static>
 pub enum TaskOutput {
     None,
 }
-

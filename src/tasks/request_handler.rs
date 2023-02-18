@@ -16,7 +16,10 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
     match request {
         RequestPacket::GetFilters(refresh_packet) => {
             let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
-            HandlerTaskOutput::SetOutboundRefreshTask(task.boxed())
+            HandlerTaskOutput::SetTask {
+                tid: 0,
+                task: HandlerTask { fut: Box::pin(task), name: "get_filters" },
+            }
         },
         RequestPacket::PostFilters => {
             // TODO: case if peer is already an inbound routing peer

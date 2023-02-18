@@ -50,6 +50,7 @@ pub(crate) fn get_filters_boxed<const N: usize, D: Document<N>>(stream: KamOutSt
 pub(crate) fn pending_get_filters<const N: usize, D: Document<N>>(db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
     PendingHandlerTask {
         params: Box::new((db, our_peer_id, remote_peer_id)),
-        fut: get_filters_boxed::<N, D>
+        fut: get_filters_boxed::<N, D>,
+        name: "get_filters",
     }
 }

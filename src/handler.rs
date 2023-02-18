@@ -49,8 +49,8 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
         let mut tasks: HashMap<u32, HandlerTask> = HashMap::new();
         let pending_tasks = Vec::new();
 
-        let init_routing_task = init_routing(Arc::clone(&db), our_peer_id, remote_peer_id);
-        tasks.insert(task_counter.next(), Box::pin(init_routing_task));
+        let init_routing_fut = init_routing(Arc::clone(&db), our_peer_id, remote_peer_id);
+        tasks.insert(task_counter.next(), HandlerTask { fut: Box::pin(init_routing_fut), name: "init_routing" });
 
         KamilataHandler {
             our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
@@ -83,8 +83,8 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         };
 
         // TODO: prevent DoS
-        let task = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
-        self.tasks.insert(self.task_counter.next(), task);
+        let fut = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
+        self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: "handle_request" });
     }
 
     // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
@@ -93,9 +93,9 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
         pending_task: Self::OutboundOpenInfo,
     ) {
-        trace!("{} Established outbound channel with {}", self.our_peer_id, self.remote_peer_id);
-        let task = (pending_task.fut)(substream, pending_task.params);
-        self.tasks.insert(self.task_counter.next(), task);
+        trace!("{} Established outbound channel with {} for {} task", self.our_peer_id, self.remote_peer_id, pending_task.name);
+        let fut = (pending_task.fut)(substream, pending_task.params);
+        self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: pending_task.name });
     }
 
     // Events are sent by the Behavior which we need to obey to.
@@ -111,10 +111,10 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
 
     fn inject_dial_upgrade_error(
         &mut self,
-        _task: Self::OutboundOpenInfo,
+        task: Self::OutboundOpenInfo,
         error: libp2p::swarm::ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
-        warn!("{} Failed to establish outbound channel with {}: {:?}. A task has been discarded.", self.our_peer_id, self.remote_peer_id, error);
+        warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, task.name);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -147,24 +147,24 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         for tid in self.tasks.keys().copied().collect::<Vec<u32>>() {
             let task = self.tasks.get_mut(&tid).unwrap();
 
-            match task.poll_unpin(cx) {
+            match task.fut.poll_unpin(cx) {
                 Poll::Ready(output) => {
-                    trace!("{} Task {tid} completed!", self.our_peer_id);
+                    trace!("{} Task {} completed (tid={tid})", self.our_peer_id, task.name);
                     self.tasks.remove(&tid);
 
                     for output in output.into_vec() {
                         match output {
-                            HandlerTaskOutput::SetOutboundRefreshTask(mut outbound_refresh_task) => {
-                                trace!("{} outbound refresh task set", self.our_peer_id);
-                                outbound_refresh_task.poll_unpin(cx); // TODO should be used
-                                self.tasks.insert(0, outbound_refresh_task);
+                            HandlerTaskOutput::SetTask { tid, mut task } => {
+                                trace!("{} Task {} inserted with tid={tid}", self.our_peer_id, task.name);
+                                task.fut.poll_unpin(cx); // TODO should be used
+                                self.tasks.insert(tid, task);
                             },
                             HandlerTaskOutput::NewPendingTask(pending_task) => {
-                                trace!("{} new pending task", self.our_peer_id);
+                                trace!("{} New pending task: {}", self.our_peer_id, pending_task.name);
                                 self.pending_tasks.push(pending_task);
                             },
                             HandlerTaskOutput::Disconnect(disconnect_packet) => {
-                                debug!("{} disconnected peer {}", self.our_peer_id, self.remote_peer_id);
+                                debug!("{} Disconnected peer {}", self.our_peer_id, self.remote_peer_id);
                                 // TODO: send packet
                                 return Poll::Ready(ConnectionHandlerEvent::Close(
                                     ioError::new(std::io::ErrorKind::Other, disconnect_packet.reason), // TODO error handling
