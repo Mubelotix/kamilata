@@ -36,21 +36,23 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
-    ///     0: outbound refresh task
+    ///     0: routing initialization
+    ///     1: filter broadcaster
+    ///     2: filter receiver
     tasks: HashMap<u32, HandlerTask>,
     /// Tasks waiting to be inserted into the `tasks` map, because their outbound substream is still opening.
-    pending_tasks: Vec<PendingHandlerTask<Box<dyn std::any::Any + Send>>>,
+    pending_tasks: Vec<(Option<u32>, PendingHandlerTask<Box<dyn std::any::Any + Send>>)>,
 }
 
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
     pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
-        let task_counter = Counter::new(1);
+        let task_counter = Counter::new(3);
         let mut tasks: HashMap<u32, HandlerTask> = HashMap::new();
         let pending_tasks = Vec::new();
 
         let init_routing_fut = init_routing(Arc::clone(&db), our_peer_id, remote_peer_id);
-        tasks.insert(task_counter.next(), HandlerTask { fut: Box::pin(init_routing_fut), name: "init_routing" });
+        tasks.insert(0, HandlerTask { fut: Box::pin(init_routing_fut), name: "init_routing" });
 
         KamilataHandler {
             our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
@@ -65,7 +67,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     type InboundProtocol = EitherUpgrade<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;
     type InboundOpenInfo = ();
-    type OutboundOpenInfo = PendingHandlerTask<Box<dyn std::any::Any + Send>>;
+    type OutboundOpenInfo = (Option<u32>, PendingHandlerTask<Box<dyn std::any::Any + Send>>);
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(upgrade::EitherUpgrade::A)
@@ -91,10 +93,13 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     fn inject_fully_negotiated_outbound(
         &mut self,
         substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
-        pending_task: Self::OutboundOpenInfo,
+        (tid, pending_task): Self::OutboundOpenInfo,
     ) {
         let fut = (pending_task.fut)(substream, pending_task.params);
-        self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: pending_task.name });
+        let tid = tid.unwrap_or_else(|| self.task_counter.next());
+        if let Some(old_task) = self.tasks.insert(tid, HandlerTask { fut, name: pending_task.name }) {
+            warn!("{} Replaced {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, pending_task.name)
+        }
     }
 
     // Events are sent by the Behavior which we need to obey to.
@@ -102,17 +107,17 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         match event {
             HandlerInEvent::Request { request, sender } => {
                 let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
-                self.pending_tasks.push(pending_task);
+                self.pending_tasks.push((None, pending_task));
             },
         };
     }
 
     fn inject_dial_upgrade_error(
         &mut self,
-        task: Self::OutboundOpenInfo,
+        (_tid, pending_task): Self::OutboundOpenInfo,
         error: libp2p::swarm::ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
     ) {
-        warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, task.name);
+        warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, pending_task.name);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -146,13 +151,16 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
                     for output in output.into_vec() {
                         match output {
                             HandlerTaskOutput::SetTask { tid, mut task } => {
-                                trace!("{} Task {} inserted with tid={tid}", self.our_peer_id, task.name);
+                                match self.tasks.get(&tid) {
+                                    Some(old_task) => warn!("{} Replacing {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, task.name),
+                                    None => trace!("{} Inserting {} task at tid={tid}", self.our_peer_id, task.name)                                    ,
+                                }
                                 task.fut.poll_unpin(cx); // TODO should be used
                                 self.tasks.insert(tid, task);
                             },
-                            HandlerTaskOutput::NewPendingTask(pending_task) => {
+                            HandlerTaskOutput::NewPendingTask { tid, pending_task } => {
                                 trace!("{} New pending task: {}", self.our_peer_id, pending_task.name);
-                                self.pending_tasks.push(pending_task);
+                                self.pending_tasks.push((tid, pending_task));
                             },
                             HandlerTaskOutput::Disconnect(disconnect_packet) => {
                                 debug!("{} Disconnected peer {}", self.our_peer_id, self.remote_peer_id);
@@ -169,9 +177,9 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
             }
         }   
 
-        if let Some(pending_task) = self.pending_tasks.pop() {
+        if let Some((tid, pending_task)) = self.pending_tasks.pop() {
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
-                protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), pending_task),
+                protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), (tid, pending_task)),
             })
         }
 

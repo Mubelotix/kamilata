@@ -34,7 +34,10 @@ pub enum HandlerTaskOutput {
         tid: u32,
         task: HandlerTask,
     },
-    NewPendingTask(PendingHandlerTask<Box<dyn std::any::Any + Send>>),
+    NewPendingTask {
+        tid: Option<u32>,
+        pending_task: PendingHandlerTask<Box<dyn std::any::Any + Send>>,
+    },
     Many(Vec<HandlerTaskOutput>),
 }
 
@@ -44,7 +47,7 @@ impl HandlerTaskOutput {
             HandlerTaskOutput::None => Vec::new(),
             HandlerTaskOutput::Disconnect(_) => vec![self],
             HandlerTaskOutput::SetTask {..} => vec![self],
-            HandlerTaskOutput::NewPendingTask(_) => vec![self],
+            HandlerTaskOutput::NewPendingTask {..} => vec![self],
             HandlerTaskOutput::Many(outputs) => outputs,
         }
     }

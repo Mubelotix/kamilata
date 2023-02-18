@@ -17,7 +17,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
         RequestPacket::GetFilters(refresh_packet) => {
             let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetTask {
-                tid: 0,
+                tid: 1,
                 task: HandlerTask { fut: Box::pin(task), name: "broadcast_filters" },
             }
         },
@@ -27,7 +27,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
             let inbound_routing_state = config.in_routing_peers.state(db.in_routing_peers().await);
             match inbound_routing_state {
                 MinTargetMaxState::Max | MinTargetMaxState::OverMax => HandlerTaskOutput::None,
-                _ => HandlerTaskOutput::NewPendingTask(pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id)),
+                _ => HandlerTaskOutput::NewPendingTask { tid: None, pending_task: pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id) },
             }
         }
         RequestPacket::Search(search_packet) => {
