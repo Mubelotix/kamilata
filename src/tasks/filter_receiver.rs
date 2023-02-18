@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(crate) async fn receive_remote_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn get_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Inbound filter refresh task executing");
 
     // Send our request
@@ -42,14 +42,14 @@ pub(crate) async fn receive_remote_filters<const N: usize, D: Document<N>>(mut s
     }
 }
 
-pub(crate) fn receive_remote_filters_boxed<const N: usize, D: Document<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
+pub(crate) fn get_filters_boxed<const N: usize, D: Document<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(Arc<Db<N, D>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
-    receive_remote_filters(stream, vals.0, vals.1, vals.2).boxed()
+    get_filters(stream, vals.0, vals.1, vals.2).boxed()
 }
 
-pub(crate) fn pending_receive_remote_filters<const N: usize, D: Document<N>>(db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+pub(crate) fn pending_get_filters<const N: usize, D: Document<N>>(db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
     PendingHandlerTask {
         params: Box::new((db, our_peer_id, remote_peer_id)),
-        fut: receive_remote_filters_boxed::<N, D>
+        fut: get_filters_boxed::<N, D>
     }
 }

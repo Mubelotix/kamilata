@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut req: GetFiltersPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn broadcast_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut req: GetFiltersPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Outbound filter refresh task executing");
     
     let config = db.get_config().await;
@@ -28,18 +28,23 @@ pub(crate) async fn broadcast_our_filters<const N: usize, D: Document<N>>(mut st
     }
 }
 
-pub(crate) async fn post_filters<const N: usize, D: Document<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn post_filters(mut stream: KamOutStreamSink<NegotiatedSubstream>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+    trace!("{our_peer_id} Telling {remote_peer_id} we would like to broadcast our filters");
+
+    stream.start_send_unpin(RequestPacket::PostFilters).unwrap();
+    stream.flush().await.unwrap();
+
     HandlerTaskOutput::None
 }
 
-pub(crate) fn post_filters_boxed<const N: usize, D: Document<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
-    let vals: Box<(Arc<Db<N, D>>, PeerId, PeerId)> = vals.downcast().unwrap();
-    post_filters(stream, vals.0, vals.1, vals.2).boxed()
+pub(crate) fn post_filters_boxed(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
+    let vals: Box<(PeerId, PeerId)> = vals.downcast().unwrap();
+    post_filters(stream, vals.0, vals.1).boxed()
 }
 
-pub(crate) fn pending_post_filters<const N: usize, D: Document<N>>(db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+pub(crate) fn pending_post_filters(our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
     PendingHandlerTask {
-        params: Box::new((db, our_peer_id, remote_peer_id)),
-        fut: post_filters_boxed::<N, D>
+        params: Box::new((our_peer_id, remote_peer_id)),
+        fut: post_filters_boxed
     }
 }

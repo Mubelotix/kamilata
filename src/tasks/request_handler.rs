@@ -15,12 +15,11 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
     debug!("{our_peer_id} Received a request: {request:?}");
     match request {
         RequestPacket::GetFilters(refresh_packet) => {
-            let task = broadcast_our_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
+            let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetOutboundRefreshTask(task.boxed())
         },
         RequestPacket::PostFilters => {
             // TODO: case if peer is already an inbound routing peer
-            let task = pending_post_filters(db, our_peer_id, remote_peer_id);
             todo!()
         }
         RequestPacket::Search(search_packet) => {
