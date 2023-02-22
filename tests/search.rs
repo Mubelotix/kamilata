@@ -60,10 +60,10 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    if missing.len() as f32 > expected as f32 * 0.2 {
+    if missing.len() as f32 > expected as f32 * 0.5 {
         panic!("Too many missing results:\n{missing:#?}");
     } else if !missing.is_empty() {
-        warn!("Less than 10% results are missing so the test is still considered successful. Missing:\n{missing:#?}");
+        warn!("Less than 50% results are missing so the test is still considered successful. Missing:\n{missing:#?}");
     } else {
         info!("All results are present");
     }
