@@ -26,7 +26,7 @@ pub async fn memory_transport(
     Ok(transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(libp2p::mplex::MplexConfig::default())
+        .multiplex(libp2p::yamux::YamuxConfig::default())
         .timeout(std::time::Duration::from_secs(20))
         .boxed())
 }
@@ -76,7 +76,7 @@ impl Client {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
-        let transport = memory_transport(local_key.clone()).await.expect("Failed to build transport");
+        let transport = libp2p::tokio_development_transport(local_key.clone()).unwrap();
 
         // Create a ping network behaviour.
         //
@@ -85,16 +85,19 @@ impl Client {
         // can be observed.
         let behaviour = KamilataBehavior::new(local_peer_id);
     
-        let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+        let mut swarm = Swarm::with_tokio_executor(transport, behaviour, local_peer_id);
     
         // Tell the swarm to listen on all interfaces and a random, OS-assigned port.
         let mut addr: Option<Multiaddr> = None;
-        for _ in 0..10 {
+        for _ in 0..20 {
             let n: usize = rand::random();
-            let addr2: Multiaddr = format!("/memory/{n}").parse().unwrap();
-            if swarm.listen_on(addr2.clone()).is_ok() {
-                addr = Some(addr2);
-                break;
+            let addr2: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}", 11201+n%4000).parse().unwrap();
+            match swarm.listen_on(addr2.clone()) {
+                Ok(_) => {
+                    addr = Some(addr2);
+                    break;
+                }
+                Err(err) => eprintln!("Failed to listen on {addr2} {err}"),
             }
         }
     

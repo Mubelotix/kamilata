@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libp2p = {version="0.50", features=["kad", "identify", "noise", "yamux", "mplex"]}
+libp2p = {version="0.50", features=["kad", "identify", "tcp", "tokio", "dns", "websocket", "noise", "yamux", "mplex"]}
 tokio = {version="1.19", features=["full"]}
 futures = "0.3"
 protocol = "3.2"
 protocol-derive = "3.2"
 unsigned-varint = "0.7"
-asynchronous-codec = "0.6.0"
+asynchronous-codec = "0.6"
 log = "0.4"
 
 [dev-dependencies]
