@@ -43,7 +43,7 @@ pub fn tcp_transport(
     Ok(transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(libp2p::yamux::YamuxConfig::default())
+        .multiplex(libp2p::mplex::MplexConfig::default())
         .timeout(std::time::Duration::from_secs(20))
         .boxed())
 }
@@ -93,7 +93,7 @@ impl Client {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
-        let transport = memory_transport(local_key.clone()).unwrap();
+        let transport = tcp_transport(local_key.clone()).unwrap();
 
         // Create a ping network behaviour.
         //
@@ -108,7 +108,7 @@ impl Client {
         let mut addr: Option<Multiaddr> = None;
         for _ in 0..20 {
             let n: usize = rand::random();
-            let addr2: Multiaddr = format!("/memory/{n}").parse().unwrap();
+            let addr2: Multiaddr = format!("/memory/{}", 11201+n%30000).parse().unwrap();
             match swarm.listen_on(addr2.clone()) {
                 Ok(_) => {
                     addr = Some(addr2);
