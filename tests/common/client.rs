@@ -31,23 +31,6 @@ pub fn memory_transport(
         .boxed())
 }
 
-pub fn tcp_transport(
-    keypair: identity::Keypair,
-) -> std::io::Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
-    let transport = libp2p::tcp::tokio::Transport::default();
-
-    let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
-        .into_authentic(&keypair)
-        .expect("Signing libp2p-noise static DH keypair failed.");
-
-    Ok(transport
-        .upgrade(libp2p::core::upgrade::Version::V1)
-        .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(libp2p::mplex::MplexConfig::default())
-        .timeout(std::time::Duration::from_secs(20))
-        .boxed())
-}
-
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
