@@ -39,7 +39,7 @@ pub fn tcp_transport(
     let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
         .into_authentic(&keypair)
         .expect("Signing libp2p-noise static DH keypair failed.");
-
+    
     Ok(transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
