@@ -93,7 +93,7 @@ impl Client {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
-        let transport = tcp_transport(local_key.clone()).unwrap();
+        let transport = memory_transport(local_key.clone()).unwrap();
 
         // Create a ping network behaviour.
         //
@@ -108,7 +108,7 @@ impl Client {
         let mut addr: Option<Multiaddr> = None;
         for _ in 0..20 {
             let n: usize = rand::random();
-            let addr2: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}", 11201+n%4000).parse().unwrap();
+            let addr2: Multiaddr = format!("/memory/{n}").parse().unwrap();
             match swarm.listen_on(addr2.clone()) {
                 Ok(_) => {
                     addr = Some(addr2);
