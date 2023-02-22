@@ -14,10 +14,27 @@ use futures::StreamExt;
 use log::*;
 use super::*;
 
-pub async fn memory_transport(
+pub fn memory_transport(
     keypair: identity::Keypair,
 ) -> std::io::Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
     let transport = MemoryTransport::default();
+
+    let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
+        .into_authentic(&keypair)
+        .expect("Signing libp2p-noise static DH keypair failed.");
+
+    Ok(transport
+        .upgrade(libp2p::core::upgrade::Version::V1)
+        .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
+        .multiplex(libp2p::mplex::MplexConfig::default())
+        .timeout(std::time::Duration::from_secs(20))
+        .boxed())
+}
+
+pub fn tcp_transport(
+    keypair: identity::Keypair,
+) -> std::io::Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
+    let transport = libp2p::tcp::tokio::Transport::default();
 
     let noise_keys = libp2p::noise::Keypair::<libp2p::noise::X25519Spec>::new()
         .into_authentic(&keypair)
@@ -76,7 +93,7 @@ impl Client {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
-        let transport = libp2p::tokio_development_transport(local_key.clone()).unwrap();
+        let transport = tcp_transport(local_key.clone()).unwrap();
 
         // Create a ping network behaviour.
         //
