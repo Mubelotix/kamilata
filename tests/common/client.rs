@@ -26,7 +26,7 @@ pub async fn memory_transport(
     Ok(transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(libp2p::noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(libp2p::yamux::YamuxConfig::default())
+        .multiplex(libp2p::mplex::MplexConfig::default())
         .timeout(std::time::Duration::from_secs(20))
         .boxed())
 }
