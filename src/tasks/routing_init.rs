@@ -19,10 +19,10 @@ pub(crate) async fn init_routing<const N: usize, D: Document<N>>(db: Arc<Db<N, D
     match (pending_post_filters_task, pending_get_filters_task) {
         (Some(t1), Some(t2)) => HandlerTaskOutput::Many(vec![
             HandlerTaskOutput::NewPendingTask { tid: None, pending_task: t1},
-            HandlerTaskOutput::NewPendingTask { tid: Some(2), pending_task: t2},
+            HandlerTaskOutput::NewPendingTask { tid: Some((2, false)), pending_task: t2},
         ]),
         (Some(t1), None) => HandlerTaskOutput::NewPendingTask { tid: None, pending_task: t1},
-        (None, Some(t2)) => HandlerTaskOutput::NewPendingTask { tid: Some(2), pending_task: t2},
+        (None, Some(t2)) => HandlerTaskOutput::NewPendingTask { tid: Some((2, false)), pending_task: t2},
         (None, None) => HandlerTaskOutput::None
     }
 }

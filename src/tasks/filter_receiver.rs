@@ -24,7 +24,7 @@ pub(crate) async fn get_filters<const N: usize, D: Document<N>>(mut stream: KamO
                 return HandlerTaskOutput::None;
             }
             None => {
-                warn!("{our_peer_id} Get filters was denied by {remote_peer_id}");
+                warn!("{our_peer_id} Get filters channel was closed by {remote_peer_id}");
                 return HandlerTaskOutput::None;
             }
         };

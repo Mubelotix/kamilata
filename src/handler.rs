@@ -41,7 +41,7 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     ///     2: filter receiver
     tasks: HashMap<u32, HandlerTask>,
     /// Tasks waiting to be inserted into the `tasks` map, because their outbound substream is still opening.
-    pending_tasks: Vec<(Option<u32>, PendingHandlerTask<Box<dyn std::any::Any + Send>>)>,
+    pending_tasks: Vec<(Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>)>,
 }
 
 impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
@@ -67,7 +67,7 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     type InboundProtocol = EitherUpgrade<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;
     type InboundOpenInfo = ();
-    type OutboundOpenInfo = (Option<u32>, PendingHandlerTask<Box<dyn std::any::Any + Send>>);
+    type OutboundOpenInfo = (Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>);
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(upgrade::EitherUpgrade::A)
@@ -96,7 +96,10 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         (tid, pending_task): Self::OutboundOpenInfo,
     ) {
         let fut = (pending_task.fut)(substream, pending_task.params);
-        let tid = tid.unwrap_or_else(|| self.task_counter.next());
+        let (tid, replace) = tid.unwrap_or_else(|| (self.task_counter.next(), true));
+        if self.tasks.contains_key(&tid) && !replace {
+            return;
+        }
         if let Some(old_task) = self.tasks.insert(tid, HandlerTask { fut, name: pending_task.name }) {
             warn!("{} Replaced {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, pending_task.name)
         }

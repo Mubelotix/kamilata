@@ -22,12 +22,11 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
             }
         },
         RequestPacket::PostFilters => {
-            // TODO: case if peer is already an inbound routing peer
             let config = db.get_config().await;
             let inbound_routing_state = config.in_routing_peers.state(db.in_routing_peers().await);
             match inbound_routing_state {
                 MinTargetMaxState::Max | MinTargetMaxState::OverMax => HandlerTaskOutput::None,
-                _ => HandlerTaskOutput::NewPendingTask { tid: None, pending_task: pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id) },
+                _ => HandlerTaskOutput::NewPendingTask { tid: Some((2, false)), pending_task: pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id) },
             }
         }
         RequestPacket::Search(search_packet) => {

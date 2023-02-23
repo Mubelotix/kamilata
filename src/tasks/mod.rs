@@ -35,7 +35,8 @@ pub enum HandlerTaskOutput {
         task: HandlerTask,
     },
     NewPendingTask {
-        tid: Option<u32>,
+        /// The task id to be assigned to the task and whether this new task should replace the old one or should be dropped if the old one is still running
+        tid: Option<(u32, bool)>,
         pending_task: PendingHandlerTask<Box<dyn std::any::Any + Send>>,
     },
     Many(Vec<HandlerTaskOutput>),
