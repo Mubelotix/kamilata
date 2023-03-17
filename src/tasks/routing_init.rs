@@ -1,18 +1,15 @@
 use super::*;
-use MinTargetMaxState::*;
 
 pub(crate) async fn init_routing<const N: usize, D: Document<N>>(db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     let config = db.get_config().await;
     
-    let out_routing_state = config.out_routing_peers.state(db.out_routing_peers().await);
     let mut pending_post_filters_task = None;
-    if matches!(out_routing_state, UnderMin | Min | UnderTarget) {
+    if config.out_routing_peers.is_under_target(db.out_routing_peers().await) {
         pending_post_filters_task = Some(pending_post_filters(our_peer_id, remote_peer_id));
     }
 
-    let in_routing_state = config.in_routing_peers.state(db.in_routing_peers().await);
     let mut pending_get_filters_task = None;
-    if matches!(in_routing_state, UnderMin | Min | UnderTarget) {
+    if config.in_routing_peers.is_under_target(db.in_routing_peers().await) {
         pending_get_filters_task = Some(pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id));
     }
     

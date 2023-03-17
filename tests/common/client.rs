@@ -40,10 +40,16 @@ pub struct Client {
 
 #[derive(Debug)]
 pub enum ClientCommand {
+    Dial {
+        addr: Multiaddr,
+    },
     Search {
         queries: SearchQueries,
         sender: OneshotSender<SearchResults<Movie>>,
         config: SearchConfig,
+    },
+    GetRoutingStats {
+        sender: OneshotSender<(usize, usize)>,
     },
 }
 
@@ -52,6 +58,10 @@ pub struct ClientController {
 }
 
 impl ClientController {
+    pub async fn dial(&self, addr: Multiaddr) {
+        self.sender.send(ClientCommand::Dial { addr }).await.unwrap();
+    }
+
     pub async fn search(&self, queries: impl Into<SearchQueries>) -> SearchResults<Movie> {
         self.search_with_config(queries, SearchConfig::default()).await
     }
@@ -69,10 +79,22 @@ impl ClientController {
         }).await.unwrap();
         receiver.await.unwrap()
     }
+
+    pub async fn get_routing_stats(&self) -> (usize, usize) {
+        let (sender, receiver) = oneshot_channel();
+        self.sender.send(ClientCommand::GetRoutingStats {
+            sender,
+        }).await.unwrap();
+        receiver.await.unwrap()
+    }
 }
 
 impl Client {
     pub async fn init() -> Self {
+        Self::init_with_config(KamilataConfig::default()).await
+    }
+
+    pub async fn init_with_config(config: KamilataConfig) -> Self {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
     
@@ -83,7 +105,7 @@ impl Client {
         // For illustrative purposes, the ping protocol is configured to
         // keep the connection alive, so a continuous sequence of pings
         // can be observed.
-        let behaviour = KamilataBehavior::new(local_peer_id);
+        let behaviour = KamilataBehavior::new_with_config(local_peer_id, config);
     
         let mut swarm = Swarm::with_tokio_executor(transport, behaviour, local_peer_id);
     
@@ -141,6 +163,9 @@ impl Client {
                 let value = futures::future::select(recv, self.swarm.select_next_some()).await;
                 match value {
                     future::Either::Left((Some(command), _)) => match command {
+                        ClientCommand::Dial { addr } => {
+                            self.swarm.dial(addr).unwrap();
+                        },
                         ClientCommand::Search { queries, sender, config } => {
                             let mut controler = self.swarm.behaviour_mut().search_with_config(queries, config).await;
                     
@@ -154,6 +179,11 @@ impl Client {
                                 sender.send(results).unwrap();
                             });
                         },
+                        ClientCommand::GetRoutingStats { sender } => {
+                            let in_routing_peers = self.swarm.behaviour_mut().in_routing_peers().await;
+                            let out_routing_peers = self.swarm.behaviour_mut().out_routing_peers().await;
+                            sender.send((in_routing_peers, out_routing_peers)).unwrap();    
+                        }
                     },
                     future::Either::Left((None, _)) => break,
                     future::Either::Right((event, _)) => match event {

@@ -92,6 +92,14 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         self.db.remove_documents(cids).await;
     }
 
+    pub async fn in_routing_peers(&self) -> usize {
+        self.db.in_routing_peers().await
+    }
+
+    pub async fn out_routing_peers(&self) -> usize {
+        self.db.out_routing_peers().await
+    }
+
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
     pub async fn search(&mut self, queries: impl Into<SearchQueries>) -> OngoingSearchController<D::SearchResult> {
         self.search_with_config(queries, SearchConfig::default()).await

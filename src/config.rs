@@ -1,13 +1,3 @@
-pub enum MinTargetMaxState {
-    UnderMin,
-    Min,
-    UnderTarget,
-    Target,
-    OverTarget,
-    Max,
-    OverMax,
-}
-
 #[derive(Debug, Clone, protocol::Protocol)]
 pub struct MinTargetMax {
     pub(crate) min: u64,
@@ -16,6 +6,15 @@ pub struct MinTargetMax {
 }
 
 impl MinTargetMax {
+    pub const fn new(min: usize, target: usize, max: usize) -> Self {
+        // TODO checks
+        Self {
+            min: min as u64,
+            target: target as u64,
+            max: max as u64,
+        }
+    }
+
     pub fn set_min(&mut self, min: usize) {
         self.min = min as u64;
         if self.target < self.min {
@@ -68,23 +67,14 @@ impl MinTargetMax {
         Some(Self { min, target, max })
     }
 
-    pub fn state(&self, value: usize) -> MinTargetMaxState {
+    pub fn is_under_target(&self, value: usize) -> bool {
         let value = value as u64;
-        if value < self.min {
-            MinTargetMaxState::UnderMin
-        } else if value == self.min {
-            MinTargetMaxState::Min
-        } else if value < self.target {
-            MinTargetMaxState::UnderTarget
-        } else if value == self.target {
-            MinTargetMaxState::Target
-        } else if value < self.max {
-            MinTargetMaxState::OverTarget
-        } else if value == self.max {
-            MinTargetMaxState::Max
-        } else {
-            MinTargetMaxState::OverMax
-        }
+        value < self.target
+    }
+
+    pub fn is_max_or_over(&self, value: usize) -> bool {
+        let value = value as u64;
+        value >= self.max
     }
 }
 
