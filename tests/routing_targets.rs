@@ -17,14 +17,12 @@ const MAIN_NODE_CONFIG: KamilataConfig = KamilataConfig {
 const LAZY_NODE_CONFIG: KamilataConfig = KamilataConfig {
     in_routing_peers: MinTargetMax::new(0, 0, 999),
     out_routing_peers: MinTargetMax::new(0, 0, 999),
-    get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
-    filter_count: 5,
+    ..MAIN_NODE_CONFIG
 };
 const GREEDY_NODE_CONFIG: KamilataConfig = KamilataConfig {
     in_routing_peers: MinTargetMax::new(0, 999, 999),
     out_routing_peers: MinTargetMax::new(0, 999, 999),
-    get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
-    filter_count: 5,
+    ..MAIN_NODE_CONFIG
 };
 
 #[tokio::test]
