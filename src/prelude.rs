@@ -9,24 +9,17 @@ pub use crate::{
     queries::*,
 };
 pub(crate) use crate::{
-    behavior::*, control::*, counter::*, db::*, handler::*, handler_proto::*,
-    packets::*, tasks::*,
+    behavior::*, control::*, counter::*, db::*, handler::*, handler_proto::*, packets::*, tasks::*,
 };
+pub(crate) use either::Either;
 pub(crate) use futures::future::BoxFuture;
 pub(crate) use futures::{prelude::*, FutureExt};
 pub(crate) use libp2p::{
-    core::{
-        connection::ConnectionId,
-        either::EitherOutput,
-        upgrade::{self, DeniedUpgrade, EitherUpgrade},
-        ConnectedPoint, UpgradeInfo,
-    },
+    core::{upgrade::DeniedUpgrade, ConnectedPoint, Endpoint, UpgradeInfo},
     swarm::{
-        derive_prelude::FromSwarm,
-        handler::{InboundUpgradeSend, OutboundUpgradeSend},
-        ConnectionHandler, ConnectionHandlerEvent, IntoConnectionHandler, KeepAlive,
-        NegotiatedSubstream, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-        SubstreamProtocol,
+        derive_prelude::FromSwarm, ConnectionDenied, ConnectionHandler, ConnectionHandlerEvent,
+        ConnectionId, KeepAlive, NegotiatedSubstream, NetworkBehaviour, PollParameters,
+        SubstreamProtocol, THandler, THandlerOutEvent, ToSwarm,
     },
     InboundUpgrade, Multiaddr, OutboundUpgrade, PeerId,
 };

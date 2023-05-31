@@ -1,4 +1,3 @@
-use std::task::Waker;
 use crate::prelude::*;
 
 /// Events aimed at a [KamilataHandler]
@@ -64,49 +63,17 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     type InEvent = HandlerInEvent;
     type OutEvent = HandlerOutEvent;
     type Error = ioError;
-    type InboundProtocol = EitherUpgrade<KamilataProtocolConfig, DeniedUpgrade>;
+    type InboundProtocol = Either<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;
     type InboundOpenInfo = ();
     type OutboundOpenInfo = (Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>);
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
-        SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(upgrade::EitherUpgrade::A)
-    }
-
-    // When we receive an inbound channel, a task is immediately created to handle the channel.
-    fn inject_fully_negotiated_inbound(
-        &mut self,
-        protocol: <Self::InboundProtocol as InboundUpgradeSend>::Output,
-        _: Self::InboundOpenInfo,
-    ) {
-        let substream = match protocol {
-            EitherOutput::First(s) => s,
-            EitherOutput::Second(_void) => return,
-        };
-
-        // TODO: prevent DoS
-        let fut = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
-        self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: "handle_request" });
-    }
-
-    // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
-    fn inject_fully_negotiated_outbound(
-        &mut self,
-        substream: <Self::OutboundProtocol as OutboundUpgradeSend>::Output,
-        (tid, pending_task): Self::OutboundOpenInfo,
-    ) {
-        let fut = (pending_task.fut)(substream, pending_task.params);
-        let (tid, replace) = tid.unwrap_or_else(|| (self.task_counter.next(), true));
-        if self.tasks.contains_key(&tid) && !replace {
-            return;
-        }
-        if let Some(old_task) = self.tasks.insert(tid, HandlerTask { fut, name: pending_task.name }) {
-            warn!("{} Replaced {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, pending_task.name)
-        }
+        SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(Either::Left)
     }
 
     // Events are sent by the Behavior which we need to obey to.
-    fn inject_event(&mut self, event: Self::InEvent) {
+    fn on_behaviour_event(&mut self, event: Self::InEvent) {
         match event {
             HandlerInEvent::Request { request, sender } => {
                 let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
@@ -115,16 +82,52 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
         };
     }
 
-    fn inject_dial_upgrade_error(
-        &mut self,
-        (_tid, pending_task): Self::OutboundOpenInfo,
-        error: libp2p::swarm::ConnectionHandlerUpgrErr<<Self::OutboundProtocol as OutboundUpgradeSend>::Error>,
-    ) {
-        warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, pending_task.name);
-    }
-
     fn connection_keep_alive(&self) -> KeepAlive {
         KeepAlive::Yes
+    }
+
+    #[warn(implied_bounds_entailment)]
+    fn on_connection_event(
+        &mut self,
+        event: libp2p::swarm::handler::ConnectionEvent<
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
+    ) {
+        match event {
+            // When we receive an inbound channel, a task is immediately created to handle the channel.
+            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedInbound(i) => {
+                let substream = match i.protocol {
+                    futures::future::Either::Left(s) => s,
+                    futures::future::Either::Right(_void) => return,
+                };
+        
+                // TODO: prevent DoS
+                let fut = handle_request(substream, Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id).boxed();
+                self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: "handle_request" });
+            },
+            // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
+            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedOutbound(i) => {
+                let (tid, pending_task) = i.info;
+                let fut = (pending_task.fut)(i.protocol, pending_task.params);
+                let (tid, replace) = tid.unwrap_or_else(|| (self.task_counter.next(), true));
+                if self.tasks.contains_key(&tid) && !replace {
+                    return;
+                }
+                if let Some(old_task) = self.tasks.insert(tid, HandlerTask { fut, name: pending_task.name }) {
+                    warn!("{} Replaced {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, pending_task.name)
+                }        
+            },
+            libp2p::swarm::handler::ConnectionEvent::AddressChange(_) => todo!(),
+            libp2p::swarm::handler::ConnectionEvent::DialUpgradeError(i) => {
+                let (_tid, pending_task) = i.info;
+                let error = i.error;
+                warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, pending_task.name);
+            },
+            libp2p::swarm::handler::ConnectionEvent::ListenUpgradeError(_) => todo!(),
+        }
     }
 
     fn poll(

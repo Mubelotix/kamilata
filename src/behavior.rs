@@ -124,12 +124,8 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
 }
 
 impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D> {
-    type ConnectionHandler = KamilataHandlerBuilder<N, D>;
+    type ConnectionHandler = KamilataHandler<N, D>;
     type OutEvent = KamilataEvent;
-
-    fn new_handler(&mut self) -> Self::ConnectionHandler {
-        KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
-    }
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
@@ -166,15 +162,46 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         }
     }
 
+    fn on_connection_handler_event(
+            &mut self,
+            _peer_id: PeerId,
+            _connection_id: ConnectionId,
+            event: THandlerOutEvent<Self>,
+        ) {
+        match event {
+
+        }
+    }
+
+    fn handle_established_inbound_connection(
+            &mut self,
+            _connection_id: ConnectionId,
+            remote_peer_id: PeerId,
+            _local_addr: &Multiaddr,
+            _remote_addr: &Multiaddr,
+        ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(KamilataHandler::new(self.our_peer_id, remote_peer_id, Arc::clone(&self.db)))
+    }
+
+    fn handle_established_outbound_connection(
+            &mut self,
+            _connection_id: ConnectionId,
+            peer: PeerId,
+            _addr: &Multiaddr,
+            _role_override: Endpoint,
+        ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(KamilataHandler::new(self.our_peer_id, peer, Arc::clone(&self.db)))
+    }
+
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+    ) -> Poll<ToSwarm<Self::OutEvent, libp2p::swarm::THandlerInEvent<Self>>> {
         // Message handlers first
         if let Some((peer_id, event)) = self.handler_event_queue.pop() {
             return Poll::Ready(
-                NetworkBehaviourAction::NotifyHandler {
+                ToSwarm::NotifyHandler {
                     peer_id,
                     handler: libp2p::swarm::NotifyHandler::Any,
                     event
@@ -184,7 +211,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         while let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
             match control_message {
                 BehaviourControlMessage::MessageHandler(peer_id, event) => return Poll::Ready(
-                    NetworkBehaviourAction::NotifyHandler {
+                    ToSwarm::NotifyHandler {
                         peer_id,
                         handler: libp2p::swarm::NotifyHandler::Any,
                         event
@@ -196,9 +223,8 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                         continue;
                     }
                     return Poll::Ready(
-                        NetworkBehaviourAction::Dial {
+                        ToSwarm::Dial {
                             opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
-                            handler: KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     )
                 },
@@ -207,7 +233,7 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     trace!("{} Dialing peer {peer_id} with addresses {addresses:?} and sending message", self.our_peer_id);
                     if self.connected_peers.contains(&peer_id) {
                         return Poll::Ready(
-                            NetworkBehaviourAction::NotifyHandler {
+                            ToSwarm::NotifyHandler {
                                 peer_id,
                                 handler: libp2p::swarm::NotifyHandler::Any,
                                 event
@@ -216,9 +242,8 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
                     }
                     self.pending_handler_events.insert(peer_id, event);
                     return Poll::Ready(
-                        NetworkBehaviourAction::Dial {
+                        ToSwarm::Dial {
                             opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
-                            handler: KamilataHandlerBuilder::new(self.our_peer_id, Arc::clone(&self.db))
                         }
                     );
                 }
