@@ -101,7 +101,7 @@ pub fn get_movies() -> Vec<Movie> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             std::process::Command::new("sh")
                 .arg("-c")
-                .arg("wget https://docs.meilisearch.com/movies.json")
+                .arg("wget https://www.meilisearch.com/movies.json")
                 .output()
                 .expect("failed to download movies.json");
             std::fs::read_to_string("movies.json").unwrap()
