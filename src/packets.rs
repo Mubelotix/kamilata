@@ -62,9 +62,6 @@ pub enum RequestPacket {
     /// Request the peer to send us its filters.
     /// The peer accepts by continuously sending [ResponsePacket::UpdateFilters], or closes the channel.
     GetFilters(GetFiltersPacket),
-    /// Invitation to send a [GetFilters](RequestPacket::GetFilters) request.
-    /// If the peer accepts, it shouldn't reply with a [ResponsePacket]. It should instead issue a [RequestPacket::GetFilters] packet.
-    PostFilters,
     /// Asks to apply our query on its documents and return results in the [ResponsePacket::ReturnResults] packet.
     Search(SearchPacket),
 

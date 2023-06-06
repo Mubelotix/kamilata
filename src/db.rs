@@ -10,7 +10,7 @@ pub(crate) struct Db<const N: usize, D: Document<N>> {
     /// Filters received from other peers
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     /// Peers we send filters to
-    out_routing_peers: RwLock<BTreeSet<PeerId>>,
+    leechers: RwLock<BTreeSet<PeerId>>,
     /// Known addresses of peers that are connected to us
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
     /// Our level-0 filter, based on the [documents](Db::documents) we have
@@ -24,7 +24,7 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             documents: RwLock::new(BTreeMap::new()),
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
-            out_routing_peers: RwLock::new(BTreeSet::new()),
+            leechers: RwLock::new(BTreeSet::new()),
             root_filter: RwLock::new(Filter::new()),
         }
     }
@@ -37,27 +37,27 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
         *self.config.write().await = config;
     }
 
-    pub async fn in_routing_peers(&self) -> usize {
+    pub async fn seeder_count(&self) -> usize {
         self.filters.read().await.len()
     }
 
-    pub async fn out_routing_peers(&self) -> usize {
-        self.out_routing_peers.read().await.len()
+    pub async fn leecher_count(&self) -> usize {
+        self.leechers.read().await.len()
     }
 
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         self.filters.write().await.remove(peer_id);
         self.addresses.write().await.remove(peer_id);
-        self.out_routing_peers.write().await.remove(peer_id);
+        self.leechers.write().await.remove(peer_id);
     }
 
     /// Sets a peer as a out_routing_peer
-    pub async fn add_out_routing_peer(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
+    pub async fn add_leecher(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
         let config = self.config.read().await;
-        let mut out_routing_peers = self.out_routing_peers.write().await;
-        if out_routing_peers.len() < config.out_routing_peers.max() {
-            out_routing_peers.insert(peer_id);
+        let mut leachers = self.leechers.write().await;
+        if leachers.len() < config.max_leechers {
+            leachers.insert(peer_id);
             Ok(())
         } else {
             Err(TooManyOutRoutingPeers{})

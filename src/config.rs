@@ -84,20 +84,12 @@ pub struct KamilataConfig {
     pub get_filters_interval: MinTargetMax,
     /// Maximum number of filters to manage per peer (default: 8)
     pub filter_count: usize,
-    /// Number of peers we receive filters from (default: 0,8,20)
-    /// 
-    /// The `min` value is not used.
-    /// Other peers will be requested to send us their filters until the `target` value is reached.
-    /// Peers requesting us to receive their filters will be accepted until the `max` value is reached.
-    /// We will stop receiving filters from peers if the `max` value is overreached.
-    pub in_routing_peers: MinTargetMax,
-    /// Number of peers we send filters to (default: 0,16,50)
-    /// 
-    /// The `min` value is not used.
-    /// Other peers will be requested to receive our filters until the `target` value is reached.
-    /// Peers requesting us our filters will be accepted until the `max` value is reached.
-    /// We will stop sending filters to peers if the `max` value is overreached.
-    pub out_routing_peers: MinTargetMax,
+    /// Maximum number of peers we receive filters from (default: 20)
+    pub max_seeders: usize,
+    /// Maximum number of peers we send filters to (default: 50)
+    pub max_leechers: usize,
+    /// Automatically leech peers (default: true)
+    pub auto_leech: bool,
 }
 
 impl Default for KamilataConfig {
@@ -105,8 +97,9 @@ impl Default for KamilataConfig {
         Self {
             get_filters_interval: MinTargetMax { min: 15_000, target: 20_000, max: 60_000*3 },
             filter_count: 8,
-            in_routing_peers: MinTargetMax { min: 0, target: 6, max: 20 },
-            out_routing_peers: MinTargetMax { min: 0, target: 12, max: 50 },
+            max_seeders: 20,
+            max_leechers: 50,
+            auto_leech: true,
         }
     }
 }

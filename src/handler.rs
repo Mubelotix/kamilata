@@ -9,12 +9,15 @@ pub enum HandlerInEvent {
         /// The response will be sent back through this channel.
         sender: OneshotSender<Option<ResponsePacket>>,
     },
+    /// Asks the handler to leech filters
+    LeechFilters,
 }
 
 impl std::fmt::Debug for HandlerInEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HandlerInEvent::Request { .. } => write!(f, "Request"),
+            HandlerInEvent::LeechFilters => write!(f, "LeechFilters"),
         }
     }
 }
@@ -47,11 +50,8 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
     pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
         let task_counter = Counter::new(3);
-        let mut tasks: HashMap<u32, HandlerTask> = HashMap::new();
+        let tasks: HashMap<u32, HandlerTask> = HashMap::new();
         let pending_tasks = Vec::new();
-
-        let init_routing_fut = init_routing(Arc::clone(&db), our_peer_id, remote_peer_id);
-        tasks.insert(0, HandlerTask { fut: Box::pin(init_routing_fut), name: "init_routing" });
 
         KamilataHandler {
             our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
@@ -76,9 +76,13 @@ impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D>
     fn on_behaviour_event(&mut self, event: Self::InEvent) {
         match event {
             HandlerInEvent::Request { request, sender } => {
-                let pending_task = pending_request::<N, D>(request, sender, self.our_peer_id, self.remote_peer_id);
+                let pending_task = pending_request::<N>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((None, pending_task));
             },
+            HandlerInEvent::LeechFilters => {
+                let pending_task = pending_leech_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
+                self.pending_tasks.push((None, pending_task))
+            }
         };
     }
 

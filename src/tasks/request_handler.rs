@@ -15,20 +15,12 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
     debug!("{our_peer_id} Request from {remote_peer_id}: {request:?}");
     match request {
         RequestPacket::GetFilters(refresh_packet) => {
-            let task = broadcast_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
+            let task = seed_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetTask {
                 tid: 1,
                 task: HandlerTask { fut: Box::pin(task), name: "broadcast_filters" },
             }
         },
-        RequestPacket::PostFilters => {
-            let config = db.get_config().await;
-            let inbound_routing_state = config.in_routing_peers.is_max_or_over(db.in_routing_peers().await);
-            match inbound_routing_state {
-                true => HandlerTaskOutput::None,
-                false => HandlerTaskOutput::NewPendingTask { tid: Some((2, false)), pending_task: pending_get_filters(Arc::clone(&db), our_peer_id, remote_peer_id) },
-            }
-        }
         RequestPacket::Search(search_packet) => {
             let hashed_queries = search_packet.queries
                 .iter()

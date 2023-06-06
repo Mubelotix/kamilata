@@ -9,19 +9,20 @@ const IN_ROUTING_MAX: usize = 7;
 const OUT_ROUTING_MAX: usize = 8;
 
 const MAIN_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    in_routing_peers: MinTargetMax::new(0, IN_ROUTING_TARGET, IN_ROUTING_MAX),
-    out_routing_peers: MinTargetMax::new(0, OUT_ROUTING_TARGET, OUT_ROUTING_MAX),
+    max_seeders: 7,
+    max_leechers: 8,
     get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
     filter_count: 5,
+    auto_leech: true,
 };
 const LAZY_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    in_routing_peers: MinTargetMax::new(0, 0, 999),
-    out_routing_peers: MinTargetMax::new(0, 0, 999),
+    max_seeders: 5,
+    max_leechers: 3,
     ..MAIN_NODE_CONFIG
 };
 const GREEDY_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    in_routing_peers: MinTargetMax::new(0, 999, 999),
-    out_routing_peers: MinTargetMax::new(0, 999, 999),
+    max_seeders: 15,
+    max_leechers: 15,
     ..MAIN_NODE_CONFIG
 };
 

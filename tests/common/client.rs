@@ -1,6 +1,6 @@
 
 use futures::future;
-use libp2p::{identity::{self, Keypair}, core::transport::MemoryTransport, PeerId, Transport, Swarm, Multiaddr, swarm::SwarmEvent};
+use libp2p::{identity::{self, Keypair}, core::transport::MemoryTransport, PeerId, Transport, Swarm, Multiaddr, swarm::{SwarmEvent, SwarmBuilder}};
 
 use tokio::{
     sync::{
@@ -107,7 +107,7 @@ impl Client {
         // can be observed.
         let behaviour = KamilataBehavior::new_with_config(local_peer_id, config);
     
-        let mut swarm = Swarm::with_tokio_executor(transport, behaviour, local_peer_id);
+        let mut swarm = SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id).build();
     
         // Tell the swarm to listen on all interfaces and a random, OS-assigned port.
         let mut addr: Option<Multiaddr> = None;
@@ -180,8 +180,8 @@ impl Client {
                             });
                         },
                         ClientCommand::GetRoutingStats { sender } => {
-                            let in_routing_peers = self.swarm.behaviour_mut().in_routing_peers().await;
-                            let out_routing_peers = self.swarm.behaviour_mut().out_routing_peers().await;
+                            let in_routing_peers = self.swarm.behaviour_mut().seeder_count().await;
+                            let out_routing_peers = self.swarm.behaviour_mut().leecher_count().await;
                             sender.send((in_routing_peers, out_routing_peers)).unwrap();    
                         }
                     },

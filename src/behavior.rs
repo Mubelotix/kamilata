@@ -22,6 +22,8 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
     db: Arc<Db<N, D>>,
+    /// Copy of same field in config
+    auto_leech: bool,
 
     rt_handle: tokio::runtime::Handle,
 
@@ -51,6 +53,7 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
         KamilataBehavior {
+            auto_leech: config.auto_leech,
             our_peer_id,
             connected_peers: Vec::new(),
             db: Arc::new(Db::new(config)),
@@ -92,12 +95,16 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         self.db.remove_documents(cids).await;
     }
 
-    pub async fn in_routing_peers(&self) -> usize {
-        self.db.in_routing_peers().await
+    pub async fn seeder_count(&self) -> usize {
+        self.db.seeder_count().await
     }
 
-    pub async fn out_routing_peers(&self) -> usize {
-        self.db.out_routing_peers().await
+    pub async fn leecher_count(&self) -> usize {
+        self.db.leecher_count().await
+    }
+
+    pub fn leech_filters(&mut self, seeder: PeerId) {
+        self.handler_event_queue.push((seeder, HandlerInEvent::LeechFilters));
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
@@ -131,6 +138,9 @@ impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D>
         match event {
             FromSwarm::ConnectionEstablished(info) => {
                 self.connected_peers.push(info.peer_id);
+                if self.auto_leech {
+                    self.leech_filters(info.peer_id);
+                }
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
