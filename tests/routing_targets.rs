@@ -3,26 +3,21 @@
 mod common;
 use common::*;
 
-const IN_ROUTING_TARGET: usize = 5;
-const OUT_ROUTING_TARGET: usize = 6;
-const IN_ROUTING_MAX: usize = 7;
-const OUT_ROUTING_MAX: usize = 8;
-
 const MAIN_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    max_seeders: 7,
-    max_leechers: 8,
+    max_seeders: 5,
+    max_leechers: 5,
     get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
     filter_count: 5,
     auto_leech: true,
 };
 const LAZY_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    max_seeders: 5,
-    max_leechers: 3,
+    max_seeders: 4,
+    max_leechers: 4,
     ..MAIN_NODE_CONFIG
 };
 const GREEDY_NODE_CONFIG: KamilataConfig = KamilataConfig {
-    max_seeders: 15,
-    max_leechers: 15,
+    max_seeders: 6,
+    max_leechers: 6,
     ..MAIN_NODE_CONFIG
 };
 
@@ -61,8 +56,8 @@ async fn routing_targets() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let routing_stats = main_controler.get_routing_stats().await;
-    assert_eq!(routing_stats.0, IN_ROUTING_TARGET);
-    assert_eq!(routing_stats.1, OUT_ROUTING_TARGET);
+    assert_eq!(routing_stats.0, 5);
+    assert_eq!(routing_stats.1, 5);
 
     info!("Creating connections with greedy nodes...");
     for addr in greedy_client_addresses {
@@ -71,8 +66,8 @@ async fn routing_targets() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let routing_stats = main_controler.get_routing_stats().await;
-    assert_eq!(routing_stats.0, IN_ROUTING_MAX);
-    assert_eq!(routing_stats.1, OUT_ROUTING_MAX);
+    assert_eq!(routing_stats.0, 5);
+    assert_eq!(routing_stats.1, 5);
 
     Ok(())
 }
