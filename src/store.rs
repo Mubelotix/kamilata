@@ -14,5 +14,5 @@ pub trait Store<const N: usize>: Send + Sync + 'static {
     async fn get_filter(&self) -> Filter<N>; // TODO: use reference?
 
     // expanded async search
-    fn search(&self, words: &[String], min_matching: usize) -> Pin<Box<dyn Future<Output = Vec<Self::SearchResult>> + Send + Sync + 'static>>;
+    fn search(&self, words: Vec<String>, min_matching: usize) -> Pin<Box<dyn Future<Output = Vec<Self::SearchResult>> + Send + Sync + 'static>>;
 }

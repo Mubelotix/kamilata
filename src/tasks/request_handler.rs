@@ -37,7 +37,7 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 .iter()
                 .map(|q| (q.words.to_owned(), q.min_matching as usize))
                 .collect::<Vec<_>>();
-            let local_matches = join_all(queries.iter().map(|(words, min_matching)| db.store().search(words, *min_matching))).await;
+            let local_matches = join_all(queries.into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {

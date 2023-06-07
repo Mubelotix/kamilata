@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use tokio::sync::RwLock;
 
 use super::*;
@@ -40,27 +42,7 @@ pub struct MovieIndexInner<const N: usize> {
 
 #[derive(Default)]
 pub struct MovieIndex<const N: usize> {
-    inner: RwLock<MovieIndexInner<N>>,
-}
-
-impl<const N: usize> MovieIndex<N> {
-    async fn search(&self, words: &[String], min_matching: usize) -> Vec<Movie> {
-        let inner = self.inner.read().await;
-        let present_words = words.iter().map(|w| Self::hash_word(w)).filter(|h| inner.filter.get_bit(*h)).count();
-        if present_words < min_matching {
-            return Vec::new();
-        }
-
-        inner.movies.iter().filter(|movie| {
-            let mut matches = 0;
-            for word in words {
-                if movie.words().contains(word) {
-                    matches += 1;
-                }
-            }
-            matches >= min_matching
-        }).cloned().collect()
-    }
+    inner: Arc<RwLock<MovieIndexInner<N>>>,
 }
 
 #[async_trait]
@@ -83,8 +65,25 @@ impl<const N: usize> Store<N> for MovieIndex<N> {
         self.inner.read().await.filter.clone()
     }
 
-    fn search(&self, words: &[String], min_matching: usize) -> std::pin::Pin<Box<dyn futures::Future<Output = Vec<Self::SearchResult> > +Send+Sync+'static> >  {
-        Box::pin(self.search(words, min_matching))
+    fn search(&self, words: Vec<String>, min_matching: usize) -> std::pin::Pin<Box<dyn futures::Future<Output = Vec<Self::SearchResult> > +Send+Sync+'static> >  {
+        let inner2 = Arc::clone(&self.inner);
+        Box::pin(async move {
+            let inner = inner2.read().await;
+            let present_words = words.iter().map(|w| Self::hash_word(w)).filter(|h| inner.filter.get_bit(*h)).count();
+            if present_words < min_matching {
+                return Vec::new();
+            }
+
+            inner.movies.iter().filter(|movie| {
+                let mut matches = 0;
+                for word in &words {
+                    if movie.words().contains(&word) {
+                        matches += 1;
+                    }
+                }
+                matches >= min_matching
+            }).cloned().collect()
+        })
     }
 }
 

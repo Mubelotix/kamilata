@@ -252,7 +252,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
 
     // Query ourselves
     let queries = search_follower.queries().await;
-    let local_results = join_all(queries.inner.iter().map(|(words, min_matching)| db.store().search(words, *min_matching))).await;
+    let local_results = join_all(queries.inner.clone().into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
     for (query, results) in local_results.into_iter().enumerate() {
         for result in results {
             let _ = search_follower.send((result, query, our_peer_id)).await;
