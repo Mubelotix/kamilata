@@ -31,7 +31,7 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 .iter()
                 .map(|q| (q.words.iter().map(|w| S::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))
                 .collect::<Vec<_>>();
-            let remote_matches = db.search_remote(&hashed_queries).await;
+            let remote_matches = db.search_routes(&hashed_queries).await;
 
             let queries = search_packet.queries
                 .iter()

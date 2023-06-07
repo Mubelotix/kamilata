@@ -269,7 +269,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
             words.into_iter().map(|w| S::hash_word(w.as_str())).collect::<Vec<_>>(), n
         ))
         .collect::<Vec<_>>();
-    let remote_results = db.search_remote(&queries_hashed).await;
+    let remote_results = db.search_routes(&queries_hashed).await;
     let mut config;
     let mut providers = ProviderBinaryHeap::Speed(BinaryHeap::new());
     let mut already_queried = HashSet::new();

@@ -125,40 +125,6 @@ impl SearchResult for Movie {
     }
 }
 
-/*
-impl<const N: usize> Document<N> for Movie {
-    type SearchResult = Movie;
-    type WordHasher = WordHasherImpl<N>;
-
-    fn cid(&self) -> &<Self::SearchResult as SearchResult>::Cid {
-        &self.id
-    }
-
-    fn apply_to_filter(&self, filter: &mut Filter<N>) {
-        self.words().iter().for_each(|word| {
-            let idx = Self::WordHasher::hash_word(word);
-            filter.set_bit(idx, true)
-        });
-    }
-
-    fn search_result(&self, query_words: &[String], min_matching: usize) -> Option<Self::SearchResult> {
-        let words = self.words();
-
-        let mut matches = 0;
-        for word in query_words {
-            if words.contains(word) {
-                matches += 1;
-            }
-        }
-
-        if min_matching <= matches {
-            Some(self.to_owned())
-        } else {
-            None
-        }
-    }
-}*/
-
 pub fn get_movies() -> Vec<Movie> {
     let data = match std::fs::read_to_string("movies.json") {
         Ok(data) => data,

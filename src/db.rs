@@ -13,8 +13,6 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
     leechers: RwLock<BTreeSet<PeerId>>,
     /// Known addresses of peers that are connected to us
     addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
-    /// Our level-0 filter, based on the [documents](Db::documents) we have
-    root_filter: RwLock<Filter<N>>,
 }
 
 impl<const N: usize, S: Store<N>> Db<N, S> {
@@ -25,7 +23,6 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
             leechers: RwLock::new(BTreeSet::new()),
-            root_filter: RwLock::new(Filter::new()),
         }
     }
 
@@ -75,7 +72,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     pub(crate) async fn get_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<N>> {
         let mut result = Vec::new();
-        result.push(self.root_filter.read().await.clone());
+        result.push(self.store.get_filter().await); // FIXME: This is slow
 
         let filters = self.filters.read().await;
         for level in 1..10 {
@@ -123,13 +120,12 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     /// Returns peers and their distance to each query.
     /// The distance from node `n` for query `i` can be found at index `i` in the array associated with `n`.
-    pub async fn search_remote(&self, hashed_queries: &Vec<(Vec<usize>, usize)>) -> Vec<(PeerId, Vec<Option<usize>>)> {
+    pub async fn search_routes(&self, hashed_queries: &Vec<(Vec<usize>, usize)>) -> Vec<(PeerId, Vec<Option<usize>>)> {
         let filters = self.filters.read().await;
         filters
             .iter()
             .map(|(peer_id, filters)| {
-                let mut matches = Vec::new();
-                for (query_id, (hashed_words, min_matching)) in hashed_queries.iter().enumerate() {
+                (*peer_id, hashed_queries.iter().map(|(hashed_words, min_matching)| {
                     let mut best_distance = None;
                     for (distance, filter) in filters.iter().enumerate() {
                         if hashed_words.iter().filter(|w| filter.get_bit(**w)).count() >= *min_matching {
@@ -137,13 +133,30 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
                             break;
                         }
                     }
-                    matches.push(best_distance)
-                }
-                (*peer_id, matches)
+                    best_distance
+                }).collect::<Vec<_>>())
             })
-            .filter(|(_,m)| !m.is_empty())
+            .filter(|(_,m)| m.iter().any(|d| d.is_some()))
             .collect()
     }
+
+    /*
+    
+    /// Returns peers and their distance to the query.
+    pub async fn search_routes(&self, hashed_words: Vec<usize>, min_matching: usize) -> Vec<(PeerId, usize)> {
+        let filters = self.filters.read().await;
+        filters
+            .iter()
+            .filter_map(|(peer_id, filters)|
+                filters.iter().position(|f| {
+                    hashed_words.iter().filter(|w| f.get_bit(**w)).count() >= min_matching
+                })
+                .map(|d| (*peer_id, d))
+            )
+            .collect()
+    }
+
+     */
 }
 
 /// Error returned when we try to add a new outgoing routing peer but there are already too many.
