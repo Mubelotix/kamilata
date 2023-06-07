@@ -160,12 +160,18 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
 
                     for output in output.into_vec() {
                         match output {
-                            HandlerTaskOutput::SetTask { tid, task } => {
+                            HandlerTaskOutput::SetTask { tid, mut task } => {
                                 match self.tasks.get(&tid) {
                                     Some(old_task) => warn!("{} Replacing {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, task.name),
                                     None => trace!("{} Inserting {} task at tid={tid}", self.our_peer_id, task.name)                                    ,
                                 }
-                                self.tasks.insert(tid, task); // Fixme: Since task isn't polled yet, it won't wake the waker
+                                if let Poll::Ready(output) = task.fut.poll_unpin(cx) {
+                                    if !matches!(output, HandlerTaskOutput::None) {
+                                        error!("{} Task {} completed immediately after being inserted (tid={tid})", self.our_peer_id, task.name);
+                                    }
+                                } else {
+                                    self.tasks.insert(tid, task);
+                                }
                             },
                             HandlerTaskOutput::NewPendingTask { tid, pending_task } => {
                                 trace!("{} New pending task: {}", self.our_peer_id, pending_task.name);
