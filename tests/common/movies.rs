@@ -110,6 +110,12 @@ impl<const N: usize> MovieIndex<N> {
 } 
 
 impl SearchResult for Movie {
+    type Cid = usize;
+
+    fn cid(&self) -> Self::Cid {
+        self.id
+    }
+
     fn into_bytes(self) -> Vec<u8> {
         serde_json::to_vec(&self).unwrap()
     }

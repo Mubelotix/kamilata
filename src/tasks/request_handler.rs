@@ -52,12 +52,15 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
             }
 
             let mut matches = Vec::new();
+            let mut cids = HashSet::new();
             for (query_id, results) in local_matches.into_iter().enumerate() {
                 for result in results {
-                    matches.push(LocalMatch {
-                        query: query_id as u16,
-                        result: result.into_bytes(),
-                    })
+                    if cids.insert(result.cid()) {
+                        matches.push(LocalMatch {
+                            query: query_id as u16,
+                            result: result.into_bytes(),
+                        })
+                    }
                 }
             }
             stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {

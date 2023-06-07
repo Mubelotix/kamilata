@@ -2,6 +2,9 @@ use crate::prelude::*;
 use async_trait::async_trait;
 
 pub trait SearchResult: Send + Sync + 'static {
+    type Cid: std::hash::Hash + Eq + Send + Sync + std::fmt::Debug;
+
+    fn cid(&self) -> Self::Cid;
     fn into_bytes(self) -> Vec<u8>;
     fn from_bytes(bytes: &[u8]) -> Self;
 }

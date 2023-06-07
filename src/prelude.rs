@@ -28,8 +28,7 @@ pub(crate) use libp2p::{
 };
 pub(crate) use log::{debug, error, info, trace, warn};
 pub(crate) use std::{
-    collections::BTreeMap,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap, HashSet},
     io::Error as ioError,
     iter,
     pin::Pin,
