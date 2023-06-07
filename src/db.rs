@@ -120,7 +120,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     /// Returns peers and their distance to each query.
     /// The distance from node `n` for query `i` can be found at index `i` in the array associated with `n`.
-    pub async fn search_routes(&self, hashed_queries: &Vec<(Vec<usize>, usize)>) -> Vec<(PeerId, Vec<Option<usize>>)> {
+    pub async fn search_routes(&self, hashed_queries: &[(Vec<usize>, usize)]) -> Vec<(PeerId, Vec<Option<usize>>)> {
         let filters = self.filters.read().await;
         filters
             .iter()

@@ -43,7 +43,7 @@ pub struct KamilataHandler<const N: usize, S: Store<N>> {
     ///     2: filter receiver
     tasks: HashMap<u32, HandlerTask>,
     /// Tasks waiting to be inserted into the `tasks` map, because their outbound substream is still opening.
-    pending_tasks: Vec<(Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>)>,
+    pending_tasks: Vec<(Option<(u32, bool)>, PendingHandlerTask<Box<dyn Any + Send>>)>,
 }
 
 impl<const N: usize, S: Store<N>> KamilataHandler<N, S> {
@@ -66,7 +66,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     type InboundProtocol = Either<KamilataProtocolConfig, DeniedUpgrade>;
     type OutboundProtocol = KamilataProtocolConfig;
     type InboundOpenInfo = ();
-    type OutboundOpenInfo = (Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>);
+    type OutboundOpenInfo = (Option<(u32, bool)>, PendingHandlerTask<Box<dyn Any + Send>>);
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(Either::Left)

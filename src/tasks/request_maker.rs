@@ -44,7 +44,7 @@ pub async fn request<const N: usize>(
 
 pub fn request_boxed<const N: usize>(
     stream: KamOutStreamSink<NegotiatedSubstream>,
-    vals: Box<dyn std::any::Any + Send>
+    vals: Box<dyn Any + Send>
 ) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(RequestPacket, OneshotSender<Option<ResponsePacket>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     request::<N>(stream, vals.0, vals.1, vals.2, vals.3).boxed()
@@ -55,7 +55,7 @@ pub fn pending_request<const N: usize>(
     sender: OneshotSender<Option<ResponsePacket>>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+) -> PendingHandlerTask<Box<dyn Any + Send>> {
     PendingHandlerTask {
         params: Box::new((request, sender, our_peer_id, remote_peer_id)),
         fut: request_boxed::<N>,

@@ -42,12 +42,12 @@ pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOu
     }
 }
 
-pub(crate) fn leech_filters_boxed<const N: usize, S: Store<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn std::any::Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
+pub(crate) fn leech_filters_boxed<const N: usize, S: Store<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(Arc<Db<N, S>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     leech_filters(stream, vals.0, vals.1, vals.2).boxed()
 }
 
-pub(crate) fn pending_leech_filters<const N: usize, S: Store<N>>(db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn std::any::Any + Send>> {
+pub(crate) fn pending_leech_filters<const N: usize, S: Store<N>>(db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> PendingHandlerTask<Box<dyn Any + Send>> {
     PendingHandlerTask {
         params: Box::new((db, our_peer_id, remote_peer_id)),
         fut: leech_filters_boxed::<N, S>,
