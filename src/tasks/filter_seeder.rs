@@ -2,7 +2,13 @@
 
 use super::*;
 
-pub(crate) async fn seed_filters<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, mut req: GetFiltersPacket, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn seed_filters<const N: usize, S: Store<N>>(
+    mut stream: KamInStreamSink<NegotiatedSubstream>,
+    mut req: GetFiltersPacket,
+    db: Arc<Db<N, S>>,
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId
+) -> HandlerTaskOutput {
     trace!("{our_peer_id} Broadcast filters task executing");
     
     // Add remote peer to the out_routing_peers list

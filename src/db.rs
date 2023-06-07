@@ -1,12 +1,12 @@
-use std::{ops::DerefMut, collections::BTreeSet};
+use std::collections::BTreeSet;
 use crate::prelude::*;
 
-pub(crate) struct Db<const N: usize, D: Document<N>> {
+pub(crate) struct Db<const N: usize, S: Store<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
     config: RwLock<KamilataConfig>,
     /// Documents to add in the global network corpus
-    documents: RwLock<BTreeMap<<D::SearchResult as SearchResult>::Cid, D>>,
+    store: S,
     /// Filters received from other peers
     filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     /// Peers we send filters to
@@ -17,11 +17,11 @@ pub(crate) struct Db<const N: usize, D: Document<N>> {
     root_filter: RwLock<Filter<N>>,
 }
 
-impl<const N: usize, D: Document<N>> Db<N, D> {
-    pub fn new(config: KamilataConfig) -> Self {
+impl<const N: usize, S: Store<N>> Db<N, S> {
+    pub fn new(config: KamilataConfig, store: S) -> Self {
         Db {
             config: RwLock::new(config),
-            documents: RwLock::new(BTreeMap::new()),
+            store,
             filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
             leechers: RwLock::new(BTreeSet::new()),
@@ -35,6 +35,10 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
 
     pub async fn set_config(&self, config: KamilataConfig) {
         *self.config.write().await = config;
+    }
+
+    pub fn store(&self) -> &S {
+        &self.store
     }
 
     pub async fn seeder_count(&self) -> usize {
@@ -61,63 +65,6 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             Ok(())
         } else {
             Err(TooManyOutRoutingPeers{})
-        }
-    }
-
-    /// Inserts a single document to the database.
-    /// This will update the root filter without fully recompting it.
-    pub async fn insert_document(&self, document: D) {
-        document.apply_to_filter(self.root_filter.write().await.deref_mut());
-        self.documents.write().await.insert(document.cid().clone(), document);
-    }
-
-    /// Inserts multiple documents to the database.
-    /// The database while be locked for the duration of the insertion.
-    /// Use [`insert_document`] if you want to allow access to other threads while inserting.
-    pub async fn insert_documents(&self, documents: Vec<D>) {
-        let new_documents = documents;
-        let mut documents = self.documents.write().await;
-        let mut root_filter = self.root_filter.write().await;
-        for document in new_documents {
-            document.apply_to_filter(root_filter.deref_mut());
-            documents.insert(document.cid().clone(), document);
-        }
-    }
-
-    /// Removes all documents from the database.
-    pub async fn clear_documents(&self) {
-        *self.root_filter.write().await = Filter::new();
-        self.documents.write().await.clear();
-    }
-
-    /// Removes a single document from the index.
-    /// This is expensive as it will recompute the root filter.
-    /// 
-    /// If you want to remove all documents, use `clear_documents` instead.
-    /// If you want to remove multiple documents, use `remove_documents` instead.
-    pub async fn remove_document(&self, cid: &<D::SearchResult as SearchResult>::Cid) {
-        self.remove_documents(&[cid]).await;
-    }
-
-    /// Removes multiple documents from the index.
-    /// This is expensive as it will recompute the root filter.
-    pub async fn remove_documents(&self, cids: &[&<D::SearchResult as SearchResult>::Cid]) {
-        let mut recompute_root_filter = false;
-        let mut documents = self.documents.write().await;
-        for cid in cids {
-            if documents.remove(cid).is_some() {
-                recompute_root_filter = true;
-            }
-        }
-
-        let documents = documents.downgrade();
-        if recompute_root_filter {
-            let mut new_root_filter = Filter::new();
-            for document in documents.values() {
-                document.apply_to_filter(&mut new_root_filter);
-            }
-            drop(documents);
-            *self.root_filter.write().await = new_root_filter;
         }
     }
 
@@ -196,18 +143,6 @@ impl<const N: usize, D: Document<N>> Db<N, D> {
             })
             .filter(|(_,m)| !m.is_empty())
             .collect()
-    }
-
-    pub async fn search_local(&self, queries: &SearchQueries) -> Vec<(D::SearchResult, usize)> {
-        let documents = self.documents.read().await;
-        documents.values().filter_map(|document| {
-            for (query_id, (words, min_matching)) in queries.inner.iter().enumerate() {
-                if let Some(search_result) = document.search_result(words, *min_matching) {
-                    return Some((search_result, query_id));
-                }
-            }
-            None
-        }).collect()
     }
 }
 

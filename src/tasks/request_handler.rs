@@ -2,7 +2,12 @@
 
 use super::*;
 
-pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: KamInStreamSink<NegotiatedSubstream>, db: Arc<Db<N, D>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
+    mut stream: KamInStreamSink<NegotiatedSubstream>,
+    db: Arc<Db<N, S>>,
+    our_peer_id: PeerId,
+    remote_peer_id: PeerId
+) -> HandlerTaskOutput {
     let request = match stream.next().await {
         Some(Ok(request)) => request,
         Some(Err(e)) => {
@@ -24,7 +29,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
         RequestPacket::Search(search_packet) => {
             let hashed_queries = search_packet.queries
                 .iter()
-                .map(|q| (q.words.iter().map(|w| D::WordHasher::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))
+                .map(|q| (q.words.iter().map(|w| S::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))
                 .collect::<Vec<_>>();
             let remote_matches = db.search_remote(&hashed_queries).await;
 
@@ -32,7 +37,7 @@ pub(crate) async fn handle_request<const N: usize, D: Document<N>>(mut stream: K
                 .iter()
                 .map(|q| (q.words.to_owned(), q.min_matching as usize))
                 .collect::<Vec<_>>();
-            let local_matches = db.search_local(&SearchQueries::from_inner(queries)).await;
+            let local_matches = db.store().search(&SearchQueries::from_inner(queries)).await;
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {

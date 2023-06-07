@@ -18,10 +18,10 @@ pub enum KamilataEvent {
 /// This means that the [Identify](libp2p::identify::Behaviour) protocol must be manually hooked up to Kademlia through calls to [KamilataBehavior::add_address].
 /// If you choose not to use libp2p's [Identify](libp2p::identify::Behaviour), incoming connections will be accepted but we won't be able to relay queries to them.
 /// This is the same approach as [Kademlia](libp2p::kad::Kademlia).
-pub struct KamilataBehavior<const N: usize, D: Document<N>> {
+pub struct KamilataBehavior<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
-    db: Arc<Db<N, D>>,
+    db: Arc<Db<N, S>>,
     /// Copy of same field in config
     auto_leech: bool,
 
@@ -43,12 +43,12 @@ pub struct KamilataBehavior<const N: usize, D: Document<N>> {
     tasks: HashMap<usize, Task>,
 }
 
-impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
-    pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, D> {
+impl<const N: usize, S: Store<N> + Default> KamilataBehavior<N, S> {
+    pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, S> {
         Self::new_with_config(our_peer_id, KamilataConfig::default())
     }
 
-    pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehavior<N, D> {
+    pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehavior<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
@@ -56,7 +56,32 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
             auto_leech: config.auto_leech,
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new(config)),
+            db: Arc::new(Db::new(config, S::default())),
+            control_msg_sender,
+            control_msg_receiver,
+            pending_handler_events: BTreeMap::new(),
+            handler_event_queue: Vec::new(),
+            rt_handle,
+            task_counter: Counter::new(0),
+            tasks: HashMap::new(),
+        }
+    }
+}
+
+impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
+    pub fn new_with_store(our_peer_id: PeerId, store: S) -> KamilataBehavior<N, S> {
+        Self::new_with_config_and_store(our_peer_id, KamilataConfig::default(), store)
+    }
+
+    pub fn new_with_config_and_store(our_peer_id: PeerId, config: KamilataConfig, store: S) -> KamilataBehavior<N, S> {
+        let rt_handle = tokio::runtime::Handle::current();
+        let (control_msg_sender, control_msg_receiver) = channel(100);
+
+        KamilataBehavior {
+            auto_leech: config.auto_leech,
+            our_peer_id,
+            connected_peers: Vec::new(),
+            db: Arc::new(Db::new(config, store)),
             control_msg_sender,
             control_msg_receiver,
             pending_handler_events: BTreeMap::new(),
@@ -75,24 +100,8 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
         self.db.set_config(config).await
     }
 
-    pub async fn insert_document(&self, document: D) {
-        self.db.insert_document(document).await;
-    }
-
-    pub async fn insert_documents(&self, documents: Vec<D>) {
-        self.db.insert_documents(documents).await;
-    }
-
-    pub async fn clear_documents(&self) {
-        self.db.clear_documents().await;
-    }
-
-    pub async fn remove_document(&self, cid: &<D::SearchResult as SearchResult>::Cid) {
-        self.db.remove_document(cid).await;
-    }
-
-    pub async fn remove_documents(&self, cids: &[&<D::SearchResult as SearchResult>::Cid]) {
-        self.db.remove_documents(cids).await;
+    pub fn store(&self) -> &S {
+        self.db.store()
     }
 
     pub async fn seeder_count(&self) -> usize {
@@ -108,30 +117,30 @@ impl<const N: usize, D: Document<N>> KamilataBehavior<N, D> {
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search(&mut self, queries: impl Into<SearchQueries>) -> OngoingSearchController<D::SearchResult> {
+    pub async fn search(&mut self, queries: impl Into<SearchQueries>) -> OngoingSearchController<S::SearchResult> {
         self.search_with_config(queries, SearchConfig::default()).await
     }
 
     /// Starts a new search with custom [SearchPriority] and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search_with_priority(&mut self, queries: impl Into<SearchQueries>, priority: SearchPriority) -> OngoingSearchController<D::SearchResult> {
+    pub async fn search_with_priority(&mut self, queries: impl Into<SearchQueries>, priority: SearchPriority) -> OngoingSearchController<S::SearchResult> {
         self.search_with_config(queries, SearchConfig::default().with_priority(priority)).await
     }
 
     /// Starts a new search with custom [SearchConfig] and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search_with_config(&mut self, queries: impl Into<SearchQueries>, config: SearchConfig) -> OngoingSearchController<D::SearchResult> {
+    pub async fn search_with_config(&mut self, queries: impl Into<SearchQueries>, config: SearchConfig) -> OngoingSearchController<S::SearchResult> {
         let queries = queries.into();
         let handler_messager = BehaviourController {
             sender: self.control_msg_sender.clone(),
         };
         let search_state = OngoingSearchState::new(queries, config);
-        let (search_controler, search_follower) = search_state.into_pair::<D::SearchResult>();
+        let (search_controler, search_follower) = search_state.into_pair::<S::SearchResult>();
         self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, handler_messager, Arc::clone(&self.db), self.our_peer_id)));
         search_controler
     }
 }
 
-impl<const N: usize, D: Document<N>> NetworkBehaviour for KamilataBehavior<N, D> {
-    type ConnectionHandler = KamilataHandler<N, D>;
+impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
+    type ConnectionHandler = KamilataHandler<N, S>;
     type OutEvent = KamilataEvent;
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {

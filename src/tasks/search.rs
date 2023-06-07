@@ -181,13 +181,13 @@ struct QueryResult<S: SearchResult> {
     query: usize,
 }
 
-async fn search_one<const N: usize, D: Document<N>>(
+async fn search_one<const N: usize, S: Store<N>>(
     queries: SearchQueries,
     behavior_controller: BehaviourController,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> Option<(PeerId, Vec<QueryResult<D::SearchResult>>,  Vec<ProviderInfo<ANY>>)> {
+) -> Option<(PeerId, Vec<QueryResult<S::SearchResult>>,  Vec<ProviderInfo<ANY>>)> {
     debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
@@ -222,7 +222,7 @@ async fn search_one<const N: usize, D: Document<N>>(
 
     let query_results = matches.into_iter().map(|local_match|
         QueryResult {
-            result: D::SearchResult::from_bytes(&local_match.result),
+            result: S::SearchResult::from_bytes(&local_match.result),
             query: local_match.query as usize,
         }
     ).collect::<Vec<_>>();
@@ -240,26 +240,26 @@ async fn search_one<const N: usize, D: Document<N>>(
     Some((remote_peer_id, query_results, route_to_results))
 }
  
-pub(crate) async fn search<const N: usize, D: Document<N>>(
-    search_follower: OngoingSearchFollower<D::SearchResult>,
+pub(crate) async fn search<const N: usize, S: Store<N>>(
+    search_follower: OngoingSearchFollower<S::SearchResult>,
     behavior_controller: BehaviourController,
-    db: Arc<Db<N, D>>,
+    db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
 ) -> TaskOutput {
     info!("{our_peer_id} Starting search task");
 
     // Query ourselves
     let queries = search_follower.queries().await;
-    let local_results = db.search_local(&queries).await;
+    let local_results = db.store().search(&queries).await;
     for (result, query) in local_results {
-        search_follower.send((result, query, our_peer_id)).await.unwrap();
+        let _ = search_follower.send((result, query, our_peer_id)).await;
     }
     let queries_hashed = queries
         .inner
         .clone()
         .into_iter()
         .map(|(words, n)| (
-            words.into_iter().map(|w| D::WordHasher::hash_word(w.as_str())).collect::<Vec<_>>(), n
+            words.into_iter().map(|w| S::hash_word(w.as_str())).collect::<Vec<_>>(), n
         ))
         .collect::<Vec<_>>();
     let remote_results = db.search_remote(&queries_hashed).await;
@@ -285,7 +285,7 @@ pub(crate) async fn search<const N: usize, D: Document<N>>(
         while ongoing_requests.len() < config.req_limit {
             let Some(provider) = providers.pop() else {break};
             already_queried.insert(provider.peer_id);
-            let search = search_one::<N,D>(queries.clone(), behavior_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
+            let search = search_one::<N,S>(queries.clone(), behavior_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
             ongoing_requests.push(Box::pin(timeout(Duration::from_millis(config.timeout_ms as u64), search)));
         }
 

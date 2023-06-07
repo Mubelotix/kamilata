@@ -28,10 +28,10 @@ pub enum HandlerOutEvent {}
 
 /// The [KamilataHandler] is responsible for handling a connection to a remote peer.
 /// Multiple handlers are managed by the [KamilataBehavior].
-pub struct KamilataHandler<const N: usize, D: Document<N>> {
+pub struct KamilataHandler<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-    db: Arc<Db<N, D>>,
+    db: Arc<Db<N, S>>,
 
     rt_handle: tokio::runtime::Handle,
     
@@ -46,8 +46,8 @@ pub struct KamilataHandler<const N: usize, D: Document<N>> {
     pending_tasks: Vec<(Option<(u32, bool)>, PendingHandlerTask<Box<dyn std::any::Any + Send>>)>,
 }
 
-impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
-    pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, D>>) -> Self {
+impl<const N: usize, S: Store<N>> KamilataHandler<N, S> {
+    pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, S>>) -> Self {
         let rt_handle = tokio::runtime::Handle::current();
         let task_counter = Counter::new(3);
         let tasks: HashMap<u32, HandlerTask> = HashMap::new();
@@ -59,7 +59,7 @@ impl<const N: usize, D: Document<N>> KamilataHandler<N, D> {
     }
 }
 
-impl<const N: usize, D: Document<N>> ConnectionHandler for KamilataHandler<N, D> {
+impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     type InEvent = HandlerInEvent;
     type OutEvent = HandlerOutEvent;
     type Error = ioError;
