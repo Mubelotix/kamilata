@@ -14,4 +14,4 @@ pub use log::*;
 pub use libp2p::swarm::dial_opts::DialOpts;
 pub use tokio::time::sleep;
 pub use std::time::Duration;
-
+pub use async_trait::async_trait;

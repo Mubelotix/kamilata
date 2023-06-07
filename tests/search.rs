@@ -34,7 +34,7 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Adding documents...");
     for (i, movies) in movies.as_slice().chunks((movies.len() as f64 / NODE_COUNT as f64).ceil() as usize).enumerate() {
-        clients[i].behavior().insert_documents(movies.to_vec()).await;
+        clients[i].store().insert_documents(movies).await;
     }
 
     info!("Launching clients...");

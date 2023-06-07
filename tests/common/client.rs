@@ -34,7 +34,7 @@ pub fn memory_transport(
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<125000, Movie>>,
+    swarm: Swarm<KamilataBehavior<125000, MovieIndex<125000>>>,
     addr: Multiaddr,
 }
 
@@ -139,19 +139,23 @@ impl Client {
         self.local_peer_id
     }
 
-    pub fn behavior(&self) -> &KamilataBehavior<125000, Movie> {
+    pub fn behavior(&self) -> &KamilataBehavior<125000, MovieIndex<125000>> {
         self.swarm.behaviour()
     }
 
-    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, Movie> {
+    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, MovieIndex<125000>> {
         self.swarm.behaviour_mut()
     }
 
-    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, Movie>> {
+    pub fn store(&self) -> &MovieIndex<125000> {
+        self.swarm.behaviour().store()
+    }
+
+    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, MovieIndex<125000>>> {
         &self.swarm
     }
 
-    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, Movie>> {
+    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, MovieIndex<125000>>> {
         &mut self.swarm
     }
 

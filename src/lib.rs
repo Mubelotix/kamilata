@@ -3,7 +3,7 @@ pub mod config;
 pub mod control;
 pub(crate) mod counter;
 pub mod db;
-pub mod document;
+pub mod store;
 pub mod filters;
 pub mod handler;
 pub(crate) mod handler_proto;

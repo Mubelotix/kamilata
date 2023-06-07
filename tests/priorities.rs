@@ -42,8 +42,8 @@ async fn init_network() -> (Movie, Movie, ClientController, ClientController, Cl
     client1.swarm_mut().dial(DialOpts::peer_id(client4.peer_id()).addresses(vec![client4.addr().to_owned()]).build()).unwrap();
     client2.swarm_mut().dial(DialOpts::peer_id(client3.peer_id()).addresses(vec![client3.addr().to_owned()]).build()).unwrap();
 
-    client3.behavior_mut().insert_document(doc1.clone()).await;
-    client4.behavior_mut().insert_document(doc2.clone()).await;
+    client3.store().insert_document(doc1.clone()).await;
+    client4.store().insert_document(doc2.clone()).await;
 
     let controller1 = client1.run();
     let controller2 = client2.run();

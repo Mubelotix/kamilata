@@ -37,7 +37,7 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 .iter()
                 .map(|q| (q.words.to_owned(), q.min_matching as usize))
                 .collect::<Vec<_>>();
-            let local_matches = db.store().search(&SearchQueries::from_inner(queries)).await;
+            let local_matches = join_all(queries.iter().map(|(words, min_matching)| db.store().search(words, *min_matching))).await;
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {
@@ -51,14 +51,18 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 }
             }
 
-            stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
-                distant_matches,
-                matches: local_matches.into_iter().map(|(result, query_id)| {
-                    LocalMatch {
+            let mut matches = Vec::new();
+            for (query_id, results) in local_matches.into_iter().enumerate() {
+                for result in results {
+                    matches.push(LocalMatch {
                         query: query_id as u16,
                         result: result.into_bytes(),
-                    }
-                }).collect()
+                    })
+                }
+            }
+            stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
+                distant_matches,
+                matches
             })).unwrap();
             stream.flush().await.unwrap();
             trace!("{our_peer_id} Sent the data to {remote_peer_id}.");

@@ -4,16 +4,19 @@ pub use crate::{
     control::{
         FixedSearchPriority, OngoingSearchController, SearchConfig, SearchPriority, SearchResults,
     },
-    document::*,
     filters::*,
     queries::*,
+    store::*,
 };
 pub(crate) use crate::{
     behavior::*, control::*, counter::*, db::*, handler::*, handler_proto::*, packets::*, tasks::*,
 };
 pub(crate) use either::Either;
-pub(crate) use futures::future::BoxFuture;
-pub(crate) use futures::{prelude::*, FutureExt};
+pub(crate) use futures::{
+    future::{join_all, BoxFuture},
+    prelude::*,
+    FutureExt,
+};
 pub(crate) use libp2p::{
     core::{upgrade::DeniedUpgrade, ConnectedPoint, Endpoint, UpgradeInfo},
     swarm::{

@@ -1,5 +1,7 @@
 //! This module contains the algorithm that is used for discovering results on the network.
 
+use futures::future::join_all;
+
 use super::*;
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
@@ -250,9 +252,11 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
 
     // Query ourselves
     let queries = search_follower.queries().await;
-    let local_results = db.store().search(&queries).await;
-    for (result, query) in local_results {
-        let _ = search_follower.send((result, query, our_peer_id)).await;
+    let local_results = join_all(queries.inner.iter().map(|(words, min_matching)| db.store().search(words, *min_matching))).await;
+    for (query, results) in local_results.into_iter().enumerate() {
+        for result in results {
+            let _ = search_follower.send((result, query, our_peer_id)).await;
+        }
     }
     let queries_hashed = queries
         .inner

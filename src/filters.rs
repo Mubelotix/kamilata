@@ -56,6 +56,12 @@ impl<const N: usize> Filter<N> {
     }
 }
 
+impl<const N: usize> Default for Filter<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> std::ops::BitOr for Filter<N> {
     type Output = Self;
 
