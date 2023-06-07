@@ -17,12 +17,9 @@ use super::*;
 pub fn memory_transport(
     keypair: identity::Keypair,
 ) -> std::io::Result<libp2p::core::transport::Boxed<(PeerId, libp2p::core::muxing::StreamMuxerBox)>> {
-    let transport = MemoryTransport::default();
-    let id_keys = identity::Keypair::generate_ed25519();
-
-    Ok(transport
+    Ok(MemoryTransport::default()
         .upgrade(libp2p::core::upgrade::Version::V1)
-        .authenticate(libp2p::noise::Config::new(&id_keys).expect("signing libp2p-noise static keypair"))
+        .authenticate(libp2p::noise::Config::new(&keypair).expect("signing libp2p-noise static keypair"))
         .multiplex(libp2p::mplex::MplexConfig::default())
         .timeout(std::time::Duration::from_secs(20))
         .boxed())
