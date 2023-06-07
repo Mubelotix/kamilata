@@ -18,6 +18,11 @@ impl<const N: usize> Filter<N> {
         bit != 0
     }
 
+    /// Gets a word in the filter.
+    pub fn get_word<S: crate::store::Store<N>>(&self, word: &str) -> bool {
+        S::hash_word(word).into_iter().all(|hash| self.get_bit(hash))
+    }
+
     /// Sets a bit in the filter.
     pub fn set_bit(&mut self, idx: usize, value: bool) {
         if idx >= self.bit_len() {
@@ -28,6 +33,11 @@ impl<const N: usize> Filter<N> {
         let bit = value as u8;
         let keeping_mask = !(1 << bit_idx);
         self.0[byte_idx] = (self.0[byte_idx] & keeping_mask) + (bit << bit_idx);
+    }
+
+    /// Adds a word in the filter.
+    pub fn add_word<S: crate::store::Store<N>>(&mut self, word: &str) {
+        S::hash_word(word).into_iter().for_each(|hash| self.set_bit(hash, true));
     }
 
     /// Returns the number of bits set to 1 in the filter.

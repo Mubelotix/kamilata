@@ -27,17 +27,13 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
             }
         },
         RequestPacket::Search(search_packet) => {
-            let hashed_queries = search_packet.queries
-                .iter()
-                .map(|q| (q.words.iter().map(|w| S::hash_word(w)).collect::<Vec<_>>(), q.min_matching as usize))
-                .collect::<Vec<_>>();
-            let remote_matches = db.search_routes(&hashed_queries).await;
-
-            let queries = search_packet.queries
+            let queries = SearchQueries::from_inner(search_packet.queries
                 .iter()
                 .map(|q| (q.words.to_owned(), q.min_matching as usize))
-                .collect::<Vec<_>>();
-            let local_matches = join_all(queries.into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
+                .collect::<Vec<_>>());
+            
+            let remote_matches = db.search_routes(&queries).await;
+            let local_matches = join_all(queries.inner.into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {
