@@ -7,8 +7,8 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
     config: RwLock<KamilataConfig>,
     /// Documents to add in the global network corpus
     store: S,
-    /// Filters received from other peers
-    filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
+    /// Filters received from seeders
+    seeder_filters: RwLock<BTreeMap<PeerId, Vec<Filter<N>>>>,
     /// Peers we send filters to
     leechers: RwLock<BTreeSet<PeerId>>,
     /// Known addresses of peers that are connected to us
@@ -20,7 +20,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
         Db {
             config: RwLock::new(config),
             store,
-            filters: RwLock::new(BTreeMap::new()),
+            seeder_filters: RwLock::new(BTreeMap::new()),
             addresses: RwLock::new(BTreeMap::new()),
             leechers: RwLock::new(BTreeSet::new()),
         }
@@ -39,7 +39,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
     }
 
     pub async fn seeder_count(&self) -> usize {
-        self.filters.read().await.len()
+        self.seeder_filters.read().await.len()
     }
 
     pub async fn leecher_count(&self) -> usize {
@@ -48,33 +48,45 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
-        self.filters.write().await.remove(peer_id);
+        self.seeder_filters.write().await.remove(peer_id);
         self.addresses.write().await.remove(peer_id);
         self.leechers.write().await.remove(peer_id);
     }
 
-    /// Sets a peer as a out_routing_peer
-    pub async fn add_leecher(&self, peer_id: PeerId) -> Result<(), TooManyOutRoutingPeers> {
+    /// Claims a spot as a leecher.
+    pub async fn add_leecher(&self, peer_id: PeerId) -> Result<(), TooManyLeechers> {
         let config = self.config.read().await;
         let mut leachers = self.leechers.write().await;
         if leachers.len() < config.max_leechers {
             leachers.insert(peer_id);
             Ok(())
         } else {
-            Err(TooManyOutRoutingPeers{})
+            Err(TooManyLeechers{})
+        }
+    }
+
+    /// Claims a spot as a seeder.
+    pub async fn add_seeder(&self, peer_id: PeerId) -> Result<(), TooManySeeders> {
+        let config = self.config.read().await;
+        let mut seeder_filters = self.seeder_filters.write().await;
+        if seeder_filters.len() < config.max_seeders {
+            seeder_filters.insert(peer_id, Vec::new());
+            Ok(())
+        } else {
+            Err(TooManySeeders{})
         }
     }
 
     pub async fn set_remote_filter(&self, peer_id: PeerId, filters: Vec<Filter<N>>) {
         // TODO size checks
-        self.filters.write().await.insert(peer_id, filters);
+        self.seeder_filters.write().await.insert(peer_id, filters);
     }
 
     pub(crate) async fn get_filters(&self, ignore_peers: &[PeerId]) -> Vec<Filter<N>> {
         let mut result = Vec::new();
         result.push(self.store.get_filter().await); // FIXME: This is slow
 
-        let filters = self.filters.read().await;
+        let filters = self.seeder_filters.read().await;
         for level in 1..10 {
             let mut filter = Filter::new();
             let mut is_null = true;
@@ -121,7 +133,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
     /// Returns peers and their distance to each query.
     /// The distance from node `n` for query `i` can be found at index `i` in the array associated with `n`.
     pub async fn search_routes(&self, hashed_queries: &[(Vec<usize>, usize)]) -> Vec<(PeerId, Vec<Option<usize>>)> {
-        let filters = self.filters.read().await;
+        let filters = self.seeder_filters.read().await;
         filters
             .iter()
             .map(|(peer_id, filters)| {
@@ -159,6 +171,10 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
      */
 }
 
-/// Error returned when we try to add a new outgoing routing peer but there are already too many.
+/// Error returned when we try to add a new leecher but there are already too many.
 #[derive(Debug, Clone)]
-pub struct TooManyOutRoutingPeers {}
+pub struct TooManyLeechers {}
+
+/// Error returned when we try to add a new seeder but there are already too many.
+#[derive(Debug, Clone)]
+pub struct TooManySeeders {}

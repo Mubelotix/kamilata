@@ -44,6 +44,11 @@ async fn search() -> Result<(), Box<dyn std::error::Error>> {
         sleep(Duration::from_millis((20000/NODE_COUNT) as u64)).await; // We launch the network over a time period of 20 seconds so that they don't always update their filters at the same time.
     }
 
+    info!("Start leeching...");
+    for c in &controlers {
+        c.leech_from_all().await;
+    }
+
     info!("Waiting for the network to stabilize...");
     sleep(Duration::from_secs(2)).await;
     // FIXME: This is not enough time to let the filters propagate beyond the very first levels

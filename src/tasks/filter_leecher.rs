@@ -5,6 +5,12 @@ use super::*;
 pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Inbound filter refresh task executing");
 
+    // Claims a spot as a seeder for the remote peer
+    if let Err(TooManySeeders{}) = db.add_seeder(remote_peer_id).await {
+        warn!("{our_peer_id} Too many seeders, can't leech from {remote_peer_id}");
+        return HandlerTaskOutput::None;
+    }
+
     // Send our request
     let config = db.get_config().await; // TODO config updates are useless
     let req = GetFiltersPacket {

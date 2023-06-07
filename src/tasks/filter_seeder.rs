@@ -11,9 +11,9 @@ pub(crate) async fn seed_filters<const N: usize, S: Store<N>>(
 ) -> HandlerTaskOutput {
     trace!("{our_peer_id} Broadcast filters task executing");
     
-    // Add remote peer to the out_routing_peers list
-    if let Err(e) = db.add_leecher(remote_peer_id).await {
-        warn!("{our_peer_id} Couldn't add leecher {remote_peer_id}: {e:?}");
+    // Claims a spot as a leecher for the remote peer
+    if let Err(TooManyLeechers{}) = db.add_leecher(remote_peer_id).await {
+        warn!("{our_peer_id} Too many leechers, can't seed to {remote_peer_id}");
         return HandlerTaskOutput::None;
     }
 

@@ -49,15 +49,20 @@ async fn init_network() -> (Movie, Movie, ClientController, ClientController, Cl
     client3.store().insert_document(doc1.clone()).await;
     client4.store().insert_document(doc2.clone()).await;
 
-    let controller1 = client1.run();
-    let controller2 = client2.run();
-    let controller3 = client3.run();
-    let controller4 = client4.run();
+    let c1 = client1.run();
+    let c2 = client2.run();
+    let c3 = client3.run();
+    let c4 = client4.run();
+
+    sleep(Duration::from_secs(1)).await;
+    c1.leech_from(&c2).await;
+    c1.leech_from(&c4).await;
+    c2.leech_from(&c3).await;
 
     info!("Waiting for filters to propagate...");
-    sleep(Duration::from_secs(25)).await;
+    sleep(Duration::from_secs(20)).await;
 
-    (doc1, doc2, controller1, controller2, controller3, controller4)
+    (doc1, doc2, c1, c2, c3, c4)
 }
 
 #[tokio::test]

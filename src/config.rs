@@ -88,8 +88,6 @@ pub struct KamilataConfig {
     pub max_seeders: usize,
     /// Maximum number of peers we send filters to (default: 50)
     pub max_leechers: usize,
-    /// Automatically leech peers (default: true)
-    pub auto_leech: bool,
 }
 
 impl Default for KamilataConfig {
@@ -99,7 +97,6 @@ impl Default for KamilataConfig {
             filter_count: 8,
             max_seeders: 20,
             max_leechers: 50,
-            auto_leech: true,
         }
     }
 }

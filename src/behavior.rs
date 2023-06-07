@@ -22,8 +22,6 @@ pub struct KamilataBehavior<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
     db: Arc<Db<N, S>>,
-    /// Copy of same field in config
-    auto_leech: bool,
 
     rt_handle: tokio::runtime::Handle,
 
@@ -53,7 +51,6 @@ impl<const N: usize, S: Store<N> + Default> KamilataBehavior<N, S> {
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
         KamilataBehavior {
-            auto_leech: config.auto_leech,
             our_peer_id,
             connected_peers: Vec::new(),
             db: Arc::new(Db::new(config, S::default())),
@@ -78,7 +75,6 @@ impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
         KamilataBehavior {
-            auto_leech: config.auto_leech,
             our_peer_id,
             connected_peers: Vec::new(),
             db: Arc::new(Db::new(config, store)),
@@ -112,7 +108,7 @@ impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
         self.db.leecher_count().await
     }
 
-    pub fn leech_filters(&mut self, seeder: PeerId) {
+    pub fn leech_from(&mut self, seeder: PeerId) {
         self.handler_event_queue.push((seeder, HandlerInEvent::LeechFilters));
     }
 
@@ -147,9 +143,6 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
         match event {
             FromSwarm::ConnectionEstablished(info) => {
                 self.connected_peers.push(info.peer_id);
-                if self.auto_leech {
-                    self.leech_filters(info.peer_id);
-                }
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }

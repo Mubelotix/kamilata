@@ -45,15 +45,28 @@ pub enum ClientCommand {
     GetRoutingStats {
         sender: OneshotSender<(usize, usize)>,
     },
+    LeechFrom {
+        seeder: PeerId,
+    },
+    LeechFromAll,
 }
 
 pub struct ClientController {
     sender: Sender<ClientCommand>,
+    peer_id: PeerId,
 }
 
 impl ClientController {
     pub async fn dial(&self, addr: Multiaddr) {
         self.sender.send(ClientCommand::Dial { addr }).await.unwrap();
+    }
+
+    pub async fn leech_from(&self, seeder: &ClientController) {
+        self.sender.send(ClientCommand::LeechFrom { seeder: seeder.peer_id }).await.unwrap();
+    }
+
+    pub async fn leech_from_all(&self) {
+        self.sender.send(ClientCommand::LeechFromAll).await.unwrap();
     }
 
     pub async fn search(&self, queries: impl Into<SearchQueries>) -> SearchResults<Movie> {
@@ -74,6 +87,7 @@ impl ClientController {
         receiver.await.unwrap()
     }
 
+    /// Returns (seeder_count, leecher_count)
     pub async fn get_routing_stats(&self) -> (usize, usize) {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::GetRoutingStats {
@@ -164,6 +178,15 @@ impl Client {
                         ClientCommand::Dial { addr } => {
                             self.swarm.dial(addr).unwrap();
                         },
+                        ClientCommand::LeechFrom { seeder } => {
+                            self.swarm.behaviour_mut().leech_from(seeder);
+                        },
+                        ClientCommand::LeechFromAll => {
+                            let peer_ids = self.swarm.connected_peers().cloned().collect::<Vec<_>>();
+                            for peer_id in peer_ids {
+                                self.swarm.behaviour_mut().leech_from(peer_id);
+                            }
+                        },
                         ClientCommand::Search { queries, sender, config } => {
                             let mut controler = self.swarm.behaviour_mut().search_with_config(queries, config).await;
                     
@@ -178,9 +201,9 @@ impl Client {
                             });
                         },
                         ClientCommand::GetRoutingStats { sender } => {
-                            let in_routing_peers = self.swarm.behaviour_mut().seeder_count().await;
-                            let out_routing_peers = self.swarm.behaviour_mut().leecher_count().await;
-                            sender.send((in_routing_peers, out_routing_peers)).unwrap();    
+                            let seeder_count = self.swarm.behaviour_mut().seeder_count().await;
+                            let leecher_count = self.swarm.behaviour_mut().leecher_count().await;
+                            sender.send((seeder_count, leecher_count)).unwrap();    
                         }
                     },
                     future::Either::Left((None, _)) => break,
@@ -194,6 +217,7 @@ impl Client {
         });
         ClientController {
             sender,
+            peer_id: self.local_peer_id,
         }
     }
 }
