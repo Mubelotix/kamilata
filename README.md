@@ -23,11 +23,20 @@ A purely peer-to-peer version of a search engine would allow the search of data 
 
 ## Scope
 
+This project is an implementation of the Kamilata protocol. It takes the form of a library that you can easily plug into your own platform. This library provides a simple yet very powerful API to index any document you might have.
+
+This library is intented for various use cases, such as:
+
+- Youtube-like video sharing platforms
+- Social networks
+- File sharing platforms
+- Web search engines
+
 Kamilata is relevant and able to provide a good search experience if *one* of the following conditions is met:
 
 - Queries are specific (a few words)
 - The corpus is small (less than a million documents)
-- A small share of the corpus drives a large share of the traffic
+- There are significant popularity differences between documents
 
 ## General Technical Description
 
