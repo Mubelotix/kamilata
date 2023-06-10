@@ -2,18 +2,8 @@
 
 use super::*;
 
-// TODO: When rejecting a peer, we should send a message to the peer explaining why we rejected it
-
 pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Inbound filter refresh task executing");
-
-    // Checks if we should allow this peer to leech
-    if let Some(approve_leecher) = &db.get_config().approve_leecher {
-        if !approve_leecher(remote_peer_id).await {
-            warn!("{our_peer_id} {remote_peer_id} wasn't approved to leech");
-            return HandlerTaskOutput::None;
-        }
-    }
 
     // Claims a spot as a seeder for the remote peer
     if let Err(TooManySeeders{}) = db.add_seeder(remote_peer_id).await {
