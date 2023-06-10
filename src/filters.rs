@@ -7,6 +7,11 @@ impl<const N: usize> Filter<N> {
         Filter(Box::new([0; N]))
     }
 
+    /// Clears the filter.
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
+
     /// Gets a bit in the filter.
     pub fn get_bit(&self, idx: usize) -> bool {
         if idx >= self.bit_len() {
@@ -14,7 +19,9 @@ impl<const N: usize> Filter<N> {
         }
         let bit_idx = idx.rem_euclid(8);
         let byte_idx = idx.div_euclid(8);
-        let bit = (self.0[byte_idx] >> bit_idx) & 1;
+        let bit = unsafe {
+            (self.0.get_unchecked(byte_idx) >> bit_idx) & 1
+        };
         bit != 0
     }
 
@@ -32,7 +39,9 @@ impl<const N: usize> Filter<N> {
         let byte_idx = idx.div_euclid(8);
         let bit = value as u8;
         let keeping_mask = !(1 << bit_idx);
-        self.0[byte_idx] = (self.0[byte_idx] & keeping_mask) + (bit << bit_idx);
+        unsafe {
+            *self.0.get_unchecked_mut(byte_idx) = (self.0.get_unchecked(byte_idx) & keeping_mask) + (bit << bit_idx);
+        }
     }
 
     /// Adds a word in the filter.
