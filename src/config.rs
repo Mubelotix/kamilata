@@ -1,3 +1,5 @@
+use crate::prelude::*;
+
 #[derive(Debug, Clone, protocol::Protocol)]
 pub struct MinTargetMax {
     pub(crate) min: u64,
@@ -78,7 +80,8 @@ impl MinTargetMax {
     }
 }
 
-#[derive(Debug, Clone)]
+pub type ApprocheLeecherClosure = Box<dyn (Fn(PeerId) -> Pin<Box<dyn std::future::Future<Output = bool> + Send>>) + Sync + Send>;
+
 pub struct KamilataConfig {
     /// Custom protocol names
     /// 
@@ -97,6 +100,29 @@ pub struct KamilataConfig {
     pub max_seeders: usize,
     /// Maximum number of peers we send filters to (default: 50)
     pub max_leechers: usize,
+    /// This closure is called when a peer wants to leech from us.
+    /// If it returns true, the peer is allowed to leech.
+    /// If this closure is not set, all peers are allowed to leech.
+    /// 
+    /// Note that the `max_leechers` limit is always enforced.
+    /// As a result, a peer might be rejected even after this closure returns true.
+    pub approve_leecher: Option<ApprocheLeecherClosure>,
+}
+
+impl std::fmt::Debug for KamilataConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KamilataConfig")
+            .field("protocol_names", &self.protocol_names)
+            .field("get_filters_interval", &self.get_filters_interval)
+            .field("filter_count", &self.filter_count)
+            .field("max_seeders", &self.max_seeders)
+            .field("max_leechers", &self.max_leechers)
+            .field("is_approved_leecher", match self.approve_leecher.is_some() {
+                true => &"Some([closure])",
+                false => &"None",
+            })
+            .finish()
+    }
 }
 
 impl Default for KamilataConfig {
@@ -107,6 +133,7 @@ impl Default for KamilataConfig {
             filter_count: 8,
             max_seeders: 20,
             max_leechers: 50,
+            approve_leecher: None,
         }
     }
 }

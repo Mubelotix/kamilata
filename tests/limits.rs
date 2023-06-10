@@ -5,19 +5,20 @@ use common::*;
 
 #[tokio::test]
 async fn limits() -> Result<(), Box<dyn std::error::Error>> {
-    let node_config = KamilataConfig {
+    let node_config = || KamilataConfig {
         protocol_names: vec![String::from("/kamilata/0.1.0")],
         max_seeders: 5,
         max_leechers: 5,
         get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
         filter_count: 0,
+        approve_leecher: None,
     };
 
     info!("Initializing clients...");
-    let main_client = Client::init_with_config(node_config.clone()).await;
+    let main_client = Client::init_with_config(node_config()).await;
     let mut clients = Vec::new();
     for _ in 0..10 {
-        let client = Client::init_with_config(node_config.clone()).await;
+        let client = Client::init_with_config(node_config()).await;
         clients.push(client);
     }
 
