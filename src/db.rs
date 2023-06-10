@@ -12,7 +12,7 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
     /// Peers we send filters to
     leechers: RwLock<BTreeSet<PeerId>>,
     /// Known addresses of peers that are connected to us
-    addresses: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
+    addrs: RwLock<BTreeMap<PeerId, Vec<Multiaddr>>>,
 }
 
 impl<const N: usize, S: Store<N>> Db<N, S> {
@@ -21,7 +21,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
             config: RwLock::new(config),
             store,
             seeder_filters: RwLock::new(BTreeMap::new()),
-            addresses: RwLock::new(BTreeMap::new()),
+            addrs: RwLock::new(BTreeMap::new()),
             leechers: RwLock::new(BTreeSet::new()),
         }
     }
@@ -46,10 +46,15 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
         self.leechers.read().await.len()
     }
 
+    /// Adds a new connected peer.
+    pub async fn add_peer(&self, peer_id: PeerId, addrs: Vec<Multiaddr>) {
+        self.addrs.write().await.insert(peer_id, addrs);
+    }
+
     /// Remove data about a peer.
     pub async fn remove_peer(&self, peer_id: &PeerId) {
         self.seeder_filters.write().await.remove(peer_id);
-        self.addresses.write().await.remove(peer_id);
+        self.addrs.write().await.remove(peer_id);
         self.leechers.write().await.remove(peer_id);
     }
 
@@ -114,20 +119,31 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
     }
 
     /// Adds a new address for a peer.
-    pub async fn insert_address(&self, peer_id: PeerId, addr: Multiaddr, front: bool) {
-        let mut addresses = self.addresses.write().await;
-        let addresses = addresses.entry(peer_id).or_insert_with(Vec::new);
-        if !addresses.contains(&addr) {
+    pub async fn add_address(&self, peer_id: PeerId, addr: Multiaddr, front: bool) -> Result<(), DisconnectedPeer> {
+        let mut addrs = self.addrs.write().await;
+        let addrs = addrs.get_mut(&peer_id).ok_or(DisconnectedPeer)?;
+        if !addrs.contains(&addr) {
             match front {
-                true => addresses.insert(0, addr),
-                false => addresses.push(addr),
+                true => addrs.insert(0, addr),
+                false => addrs.push(addr),
             }
         }
+        Ok(())
+    }
+
+    /// Sets the addresses for a peer.
+    pub async fn set_addresses(&self, peer_id: PeerId, addrs: Vec<Multiaddr>) -> Result<(), DisconnectedPeer> {
+        let mut all_addrs = self.addrs.write().await;
+        if !all_addrs.contains_key(&peer_id) {
+            return Err(DisconnectedPeer);
+        }
+        all_addrs.insert(peer_id, addrs);
+        Ok(())
     }
 
     /// Gets the addresses we know for a peer, ordered by how well they are expected to work.
     pub async fn get_addresses(&self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.addresses.read().await.get(peer_id).cloned().unwrap_or_default()
+        self.addrs.read().await.get(peer_id).cloned().unwrap_or_default()
     }
 
     /// Returns peers and their distance to each query.
@@ -178,3 +194,7 @@ pub struct TooManyLeechers {}
 /// Error returned when we try to add a new seeder but there are already too many.
 #[derive(Debug, Clone)]
 pub struct TooManySeeders {}
+
+/// Error returned when we try an operation on a peer that is not connected to us.
+#[derive(Debug, Clone)]
+pub struct DisconnectedPeer;

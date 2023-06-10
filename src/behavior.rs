@@ -133,6 +133,21 @@ impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
         self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, handler_messager, Arc::clone(&self.db), self.our_peer_id)));
         search_controler
     }
+
+    /// Adds a known listen address of a peer participating in the network.
+    /// Returns an error if the peer is not connected to us.
+    /// 
+    /// This function is inspired by [Kademlia::add_address](libp2p::kad::Kademlia::add_address).  
+    /// It is preferred to use [Kamilata::set_addresses] instead, as it retains meaning from the order of the addresses (ordered from the most reliable).
+    pub async fn add_address(&mut self, peer: &PeerId, address: Multiaddr) -> Result<(), DisconnectedPeer> {
+        self.db.add_address(*peer, address, true).await
+    }
+
+    /// Sets the known listen addresses of a peer participating in the network.
+    /// Returns an error if the peer is not connected to us.
+    pub async fn set_addresses(&mut self, peer: &PeerId, addresses: Vec<Multiaddr>) -> Result<(), DisconnectedPeer> {
+        self.db.set_addresses(*peer, addresses).await
+    }
 }
 
 impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
@@ -151,7 +166,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
                     let peer_id = info.peer_id;
                     let addr = address.to_owned();
                     tokio::spawn(async move {
-                        db2.insert_address(peer_id, addr, true).await;
+                        db2.add_peer(peer_id, vec![addr]).await;
                     });
                 }
             },
