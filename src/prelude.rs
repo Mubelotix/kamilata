@@ -30,7 +30,6 @@ pub(crate) use log::{debug, error, info, trace, warn};
 pub(crate) use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::Error as ioError,
-    iter,
     pin::Pin,
     sync::Arc,
     any::Any,
@@ -41,7 +40,7 @@ pub(crate) use tokio::{
     sync::{
         mpsc::*,
         oneshot::{
-            channel as oneshot_channel, Receiver as OneshotReceiver, Sender as OneshotSender,
+            channel as oneshot_channel, Sender as OneshotSender,
         },
         RwLock,
     },

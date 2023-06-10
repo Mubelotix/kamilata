@@ -3,20 +3,21 @@
 mod common;
 use common::*;
 
-const NODE_CONFIG: KamilataConfig = KamilataConfig {
-    max_seeders: 5,
-    max_leechers: 5,
-    get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
-    filter_count: 0,
-};
-
 #[tokio::test]
 async fn limits() -> Result<(), Box<dyn std::error::Error>> {
+    let node_config = KamilataConfig {
+        protocol_names: vec![String::from("/kamilata/0.1.0")],
+        max_seeders: 5,
+        max_leechers: 5,
+        get_filters_interval: MinTargetMax::new(60_000_000, 60_000_000, 60_000_000),
+        filter_count: 0,
+    };
+
     info!("Initializing clients...");
-    let main_client = Client::init_with_config(NODE_CONFIG).await;
+    let main_client = Client::init_with_config(node_config.clone()).await;
     let mut clients = Vec::new();
     for _ in 0..10 {
-        let client = Client::init_with_config(NODE_CONFIG).await;
+        let client = Client::init_with_config(node_config.clone()).await;
         clients.push(client);
     }
 
