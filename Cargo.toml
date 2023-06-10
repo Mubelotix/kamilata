@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libp2p = {version="0.51", features=["kad", "identify", "tokio", "noise", "mplex"]}
-tokio = {version="1.28", features=["full"]}
+libp2p = {version="0.51", features=["tokio", "noise", "mplex", "kad"]}
+tokio = {version="1.28", features=["macros", "sync", "time"]}
 futures = "0.3"
 protocol = "3.4"
 protocol-derive = "3.4"
