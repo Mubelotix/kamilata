@@ -1,5 +1,5 @@
 pub use crate::{
-    behavior::KamilataBehavior,
+    behaviour::KamilataBehaviour,
     config::*,
     control::{
         FixedSearchPriority, OngoingSearchController, SearchConfig, SearchPriority, SearchResults,
@@ -9,7 +9,7 @@ pub use crate::{
     store::*,
 };
 pub(crate) use crate::{
-    behavior::*, control::*, counter::*, db::*, handler::*, handler_proto::*, packets::*, tasks::*,
+    behaviour::*, control::*, counter::*, db::*, handler::*, handler_proto::*, packets::*, tasks::*,
 };
 pub(crate) use either::Either;
 pub(crate) use futures::{

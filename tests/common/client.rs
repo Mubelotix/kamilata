@@ -28,7 +28,7 @@ pub fn memory_transport(
 pub struct Client {
     local_key: Keypair,
     local_peer_id: PeerId,
-    swarm: Swarm<KamilataBehavior<125000, MovieIndex<125000>>>,
+    swarm: Swarm<KamilataBehaviour<125000, MovieIndex<125000>>>,
     addr: Multiaddr,
 }
 
@@ -113,7 +113,7 @@ impl Client {
         // For illustrative purposes, the ping protocol is configured to
         // keep the connection alive, so a continuous sequence of pings
         // can be observed.
-        let behaviour = KamilataBehavior::new_with_config(local_peer_id, config);
+        let behaviour = KamilataBehaviour::new_with_config(local_peer_id, config);
     
         let mut swarm = SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id).build();
     
@@ -147,11 +147,11 @@ impl Client {
         self.local_peer_id
     }
 
-    pub fn behavior(&self) -> &KamilataBehavior<125000, MovieIndex<125000>> {
+    pub fn behaviour(&self) -> &KamilataBehaviour<125000, MovieIndex<125000>> {
         self.swarm.behaviour()
     }
 
-    pub fn behavior_mut(&mut self) -> &mut KamilataBehavior<125000, MovieIndex<125000>> {
+    pub fn behaviour_mut(&mut self) -> &mut KamilataBehaviour<125000, MovieIndex<125000>> {
         self.swarm.behaviour_mut()
     }
 
@@ -159,11 +159,11 @@ impl Client {
         self.swarm.behaviour().store()
     }
 
-    pub fn swarm(&self) -> &Swarm<KamilataBehavior<125000, MovieIndex<125000>>> {
+    pub fn swarm(&self) -> &Swarm<KamilataBehaviour<125000, MovieIndex<125000>>> {
         &self.swarm
     }
 
-    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehavior<125000, MovieIndex<125000>>> {
+    pub fn swarm_mut(&mut self) -> &mut Swarm<KamilataBehaviour<125000, MovieIndex<125000>>> {
         &mut self.swarm
     }
 
@@ -208,7 +208,7 @@ impl Client {
                     },
                     future::Either::Left((None, _)) => break,
                     future::Either::Right((event, _)) => match event {
-                        SwarmEvent::Behaviour(e) => info!("{} produced behavior event {e:?}", self.local_peer_id),
+                        SwarmEvent::Behaviour(e) => info!("{} produced behaviour event {e:?}", self.local_peer_id),
                         SwarmEvent::NewListenAddr { listener_id, address } => debug!("{} is listening on {address:?} (listener id: {listener_id:?})", self.local_peer_id),
                         _ => ()
                     },

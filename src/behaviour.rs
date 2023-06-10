@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-/// Events produced by the [KamilataBehavior]
+/// Events produced by the [KamilataBehaviour]
 #[derive(Debug)]
 pub enum KamilataEvent {
     // TODO unroutable, routable and pending
@@ -11,14 +11,14 @@ pub enum KamilataEvent {
 /// 
 /// # Peer Discovery
 /// 
-/// The [KamilataBehavior] does not provide peer discovery by itself.
+/// The [KamilataBehaviour] does not provide peer discovery by itself.
 /// Peer discovery is the process by which peers in a p2p network exchange information about each other among other reasons to become resistant against the failure or replacement of the boot nodes of the network.
-/// Furthermore, the [KamilataBehavior] does not reimplement the capabilities of libp2p's [Identify](libp2p::identify::Behaviour).
+/// Furthermore, the [KamilataBehaviour] does not reimplement the capabilities of libp2p's [Identify](libp2p::identify::Behaviour).
 /// As a result, Kamilata only infers listen addresses of the peers we successfully dialed.
-/// This means that the [Identify](libp2p::identify::Behaviour) protocol must be manually hooked up to Kademlia through calls to [KamilataBehavior::add_address].
+/// This means that the [Identify](libp2p::identify::Behaviour) protocol must be manually hooked up to Kademlia through calls to [KamilataBehaviour::add_address].
 /// If you choose not to use libp2p's [Identify](libp2p::identify::Behaviour), incoming connections will be accepted but we won't be able to relay queries to them.
 /// This is the same approach as [Kademlia](libp2p::kad::Kademlia).
-pub struct KamilataBehavior<const N: usize, S: Store<N>> {
+pub struct KamilataBehaviour<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
     db: Arc<Db<N, S>>,
@@ -41,16 +41,16 @@ pub struct KamilataBehavior<const N: usize, S: Store<N>> {
     tasks: HashMap<usize, Task>,
 }
 
-impl<const N: usize, S: Store<N> + Default> KamilataBehavior<N, S> {
-    pub fn new(our_peer_id: PeerId) -> KamilataBehavior<N, S> {
+impl<const N: usize, S: Store<N> + Default> KamilataBehaviour<N, S> {
+    pub fn new(our_peer_id: PeerId) -> KamilataBehaviour<N, S> {
         Self::new_with_config(our_peer_id, KamilataConfig::default())
     }
 
-    pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehavior<N, S> {
+    pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
-        KamilataBehavior {
+        KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
             db: Arc::new(Db::new(config, S::default())),
@@ -65,16 +65,16 @@ impl<const N: usize, S: Store<N> + Default> KamilataBehavior<N, S> {
     }
 }
 
-impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
-    pub fn new_with_store(our_peer_id: PeerId, store: S) -> KamilataBehavior<N, S> {
+impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
+    pub fn new_with_store(our_peer_id: PeerId, store: S) -> KamilataBehaviour<N, S> {
         Self::new_with_config_and_store(our_peer_id, KamilataConfig::default(), store)
     }
 
-    pub fn new_with_config_and_store(our_peer_id: PeerId, config: KamilataConfig, store: S) -> KamilataBehavior<N, S> {
+    pub fn new_with_config_and_store(our_peer_id: PeerId, config: KamilataConfig, store: S) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
 
-        KamilataBehavior {
+        KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
             db: Arc::new(Db::new(config, store)),
@@ -150,7 +150,7 @@ impl<const N: usize, S: Store<N>> KamilataBehavior<N, S> {
     }
 }
 
-impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
+impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
     type ConnectionHandler = KamilataHandler<N, S>;
     type OutEvent = KamilataEvent;
 
@@ -302,7 +302,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehavior<N, S> {
     }
 }
 
-/// Internal control messages send by [BehaviourController] to [KamilataBehavior]
+/// Internal control messages send by [BehaviourController] to [KamilataBehaviour]
 #[derive(Debug)]
 pub(crate) enum BehaviourControlMessage {
     MessageHandler(PeerId, HandlerInEvent),

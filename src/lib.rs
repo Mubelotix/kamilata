@@ -1,4 +1,4 @@
-pub mod behavior;
+pub mod behaviour;
 pub mod config;
 pub mod control;
 pub(crate) mod counter;

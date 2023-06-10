@@ -27,7 +27,7 @@ impl std::fmt::Debug for HandlerInEvent {
 pub enum HandlerOutEvent {}
 
 /// The [KamilataHandler] is responsible for handling a connection to a remote peer.
-/// Multiple handlers are managed by the [KamilataBehavior].
+/// Multiple handlers are managed by the [KamilataBehaviour].
 pub struct KamilataHandler<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
@@ -72,7 +72,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
         SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(Either::Left)
     }
 
-    // Events are sent by the Behavior which we need to obey to.
+    // Events are sent by the Behaviour which we need to obey to.
     fn on_behaviour_event(&mut self, event: Self::InEvent) {
         match event {
             HandlerInEvent::Request { request, sender } => {

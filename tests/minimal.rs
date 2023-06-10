@@ -5,7 +5,7 @@ use common::*;
 #[tokio::test]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client1 = Client::init(1000).await;
-    client1.behavior().insert_documents(vec![
+    client1.behaviour().insert_documents(vec![
         Movie {
             cid: "V for Vendetta".to_string(),
             desc: "In a future British dystopian society, a shadowy freedom fighter, known only by the alias of \"V\", plots to overthrow the tyrannical government - with the help of a young woman.".to_string(),

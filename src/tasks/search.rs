@@ -185,7 +185,7 @@ struct QueryResult<S: SearchResult> {
 
 async fn search_one<const N: usize, S: Store<N>>(
     queries: SearchQueries,
-    behavior_controller: BehaviourController,
+    behaviour_controller: BehaviourController,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
@@ -200,7 +200,7 @@ async fn search_one<const N: usize, S: Store<N>>(
         }).collect()
     });
     let (sender, receiver) = oneshot_channel();
-    behavior_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::Request {
+    behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::Request {
         request,
         sender,
     }).await;
@@ -244,7 +244,7 @@ async fn search_one<const N: usize, S: Store<N>>(
  
 pub(crate) async fn search<const N: usize, S: Store<N>>(
     search_follower: OngoingSearchFollower<S::SearchResult>,
-    behavior_controller: BehaviourController,
+    behaviour_controller: BehaviourController,
     db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
 ) -> TaskOutput {
@@ -284,7 +284,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
         while ongoing_requests.len() < config.req_limit {
             let Some(provider) = providers.pop() else {break};
             already_queried.insert(provider.peer_id);
-            let search = search_one::<N,S>(queries.clone(), behavior_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
+            let search = search_one::<N,S>(queries.clone(), behaviour_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
             ongoing_requests.push(Box::pin(timeout(Duration::from_millis(config.timeout_ms as u64), search)));
         }
 
