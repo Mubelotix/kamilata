@@ -34,3 +34,12 @@ impl SearchQueries {
         }
     }   
 }
+
+impl From<Vec<String>> for SearchQueries {
+    fn from(words: Vec<String>) -> Self {
+        let words_len = words.len();
+        Self {
+            inner: vec![(words, words_len)],
+        }
+    }
+}
