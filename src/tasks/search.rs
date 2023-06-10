@@ -222,10 +222,16 @@ async fn search_one<const N: usize, S: Store<N>>(
         }
     };
 
-    let query_results = matches.into_iter().map(|local_match|
-        QueryResult {
-            result: S::SearchResult::from_bytes(&local_match.result),
-            query: local_match.query as usize,
+    let query_results = matches.into_iter().filter_map(|local_match|
+        match S::SearchResult::from_bytes(&local_match.result) {
+            Ok(result) => Some(QueryResult {
+                result,
+                query: local_match.query as usize,
+            }),
+            Err(e) => {
+                warn!("{our_peer_id} Received invalid result from {remote_peer_id}: {e}");
+                None
+            },
         }
     ).collect::<Vec<_>>();
 

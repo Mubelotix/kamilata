@@ -1,19 +1,20 @@
 use crate::prelude::*;
 use async_trait::async_trait;
 
-pub trait SearchResult: Send + Sync + 'static {
+pub trait SearchResult: Sized {
     type Cid: std::hash::Hash + Eq + Send + Sync + std::fmt::Debug;
+    type ParsingError: std::error::Error;
 
     fn cid(&self) -> Self::Cid;
     fn into_bytes(self) -> Vec<u8>;
-    fn from_bytes(bytes: &[u8]) -> Self;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::ParsingError>;
 }
 
 /// This library lets you manage your documents the way you want.
 /// This trait must be implemented on your document store.
 #[async_trait]
-pub trait Store<const N: usize>: Send + Sync + Sized + 'static {
-    type SearchResult: SearchResult + Send + Sync + 'static;
+pub trait Store<const N: usize>: Send + Sync + 'static {
+    type SearchResult: SearchResult + Send + Sync;
     
     /// Hash a word the way you like.
     /// You can return multiple hashes for a single input (it's the idea behind Bloom filters).
