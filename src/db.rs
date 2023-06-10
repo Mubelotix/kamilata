@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub(crate) struct Db<const N: usize, S: Store<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
-    config: RwLock<KamilataConfig>,
+    config: Arc<KamilataConfig>,
     /// Documents to add in the global network corpus
     store: S,
     /// Filters received from seeders
@@ -16,9 +16,9 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
 }
 
 impl<const N: usize, S: Store<N>> Db<N, S> {
-    pub fn new(config: KamilataConfig, store: S) -> Self {
+    pub fn new(config: Arc<KamilataConfig>, store: S) -> Self {
         Db {
-            config: RwLock::new(config),
+            config,
             store,
             seeder_filters: RwLock::new(BTreeMap::new()),
             addrs: RwLock::new(BTreeMap::new()),
@@ -26,12 +26,8 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
         }
     }
 
-    pub async fn get_config(&self) -> KamilataConfig {
-        self.config.read().await.clone()
-    }
-
-    pub async fn set_config(&self, config: KamilataConfig) {
-        *self.config.write().await = config;
+    pub fn get_config(&self) -> Arc<KamilataConfig> {
+        Arc::clone(&self.config)
     }
 
     pub fn store(&self) -> &S {
@@ -60,9 +56,8 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     /// Claims a spot as a leecher.
     pub async fn add_leecher(&self, peer_id: PeerId) -> Result<(), TooManyLeechers> {
-        let config = self.config.read().await;
         let mut leachers = self.leechers.write().await;
-        if leachers.len() < config.max_leechers {
+        if leachers.len() < self.config.max_leechers {
             leachers.insert(peer_id);
             Ok(())
         } else {
@@ -72,9 +67,8 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
 
     /// Claims a spot as a seeder.
     pub async fn add_seeder(&self, peer_id: PeerId) -> Result<(), TooManySeeders> {
-        let config = self.config.read().await;
         let mut seeder_filters = self.seeder_filters.write().await;
-        if seeder_filters.len() < config.max_seeders {
+        if seeder_filters.len() < self.config.max_seeders {
             seeder_filters.insert(peer_id, Vec::new());
             Ok(())
         } else {

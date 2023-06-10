@@ -80,6 +80,15 @@ impl MinTargetMax {
 
 #[derive(Debug, Clone)]
 pub struct KamilataConfig {
+    /// Custom protocol names
+    /// 
+    /// Kamilata nodes only communicate with other nodes using the same protocol name.
+    /// Using custom name(s) therefore allows to segregate nodes from others, if that is desired.
+    /// 
+    /// More than one protocol name can be supplied.
+    /// In this case the node will be able to talk to other nodes supporting any of the provided names.
+    /// Multiple names must be used with caution to avoid network partitioning.
+    pub protocol_names: Vec<String>,
     /// Min, target and max values in milliseconds
     pub get_filters_interval: MinTargetMax,
     /// Maximum number of filters to manage per peer (default: 8)
@@ -93,6 +102,7 @@ pub struct KamilataConfig {
 impl Default for KamilataConfig {
     fn default() -> Self {
         Self {
+            protocol_names: vec![String::from("/kamilata/1.0.0")],
             get_filters_interval: MinTargetMax { min: 15_000, target: 20_000, max: 60_000*3 },
             filter_count: 8,
             max_seeders: 20,

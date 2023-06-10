@@ -12,10 +12,10 @@ pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOu
     }
 
     // Send our request
-    let config = db.get_config().await; // TODO config updates are useless
+    let config = db.get_config();
     let req = GetFiltersPacket {
         filter_count: config.filter_count as u8,
-        interval: config.get_filters_interval,
+        interval: config.get_filters_interval.clone(),
         blocked_peers: Vec::new(), // TODO
     };
     stream.start_send_unpin(RequestPacket::GetFilters(req)).unwrap();

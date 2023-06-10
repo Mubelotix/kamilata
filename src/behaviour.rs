@@ -22,6 +22,7 @@ pub struct KamilataBehaviour<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     connected_peers: Vec<PeerId>,
     db: Arc<Db<N, S>>,
+    config: Arc<KamilataConfig>,
 
     rt_handle: tokio::runtime::Handle,
 
@@ -49,11 +50,13 @@ impl<const N: usize, S: Store<N> + Default> KamilataBehaviour<N, S> {
     pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
+        let config = Arc::new(config);
 
         KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new(config, S::default())),
+            db: Arc::new(Db::new(Arc::clone(&config), S::default())),
+            config,
             control_msg_sender,
             control_msg_receiver,
             pending_handler_events: BTreeMap::new(),
@@ -73,11 +76,13 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
     pub fn new_with_config_and_store(our_peer_id: PeerId, config: KamilataConfig, store: S) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
+        let config = Arc::new(config);
 
         KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new(config, store)),
+            db: Arc::new(Db::new(Arc::clone(&config), store)),
+            config,
             control_msg_sender,
             control_msg_receiver,
             pending_handler_events: BTreeMap::new(),
@@ -88,12 +93,8 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
         }
     }
 
-    pub async fn get_config(&self) -> KamilataConfig {
-        self.db.get_config().await
-    }
-
-    pub async fn set_config(&self, config: KamilataConfig) {
-        self.db.set_config(config).await
+    pub async fn get_config(&self) -> Arc<KamilataConfig> {
+        Arc::clone(&self.config)
     }
 
     pub fn store(&self) -> &S {
@@ -207,7 +208,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
             _local_addr: &Multiaddr,
             _remote_addr: &Multiaddr,
         ) -> Result<THandler<Self>, ConnectionDenied> {
-        Ok(KamilataHandler::new(self.our_peer_id, remote_peer_id, Arc::clone(&self.db)))
+        Ok(KamilataHandler::new(self.our_peer_id, remote_peer_id, Arc::clone(&self.db), Arc::clone(&self.config)))
     }
 
     fn handle_established_outbound_connection(
@@ -217,7 +218,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
             _addr: &Multiaddr,
             _role_override: Endpoint,
         ) -> Result<THandler<Self>, ConnectionDenied> {
-        Ok(KamilataHandler::new(self.our_peer_id, peer, Arc::clone(&self.db)))
+        Ok(KamilataHandler::new(self.our_peer_id, peer, Arc::clone(&self.db), Arc::clone(&self.config)))
     }
 
     fn poll(

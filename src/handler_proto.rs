@@ -4,29 +4,29 @@ use asynchronous_codec::{Framed, BytesMut};
 use libp2p::kad::protocol::KadStreamSink;
 use unsigned_varint::codec::UviBytes;
 
-#[derive(Debug, Clone, Default)]
-pub struct KamilataProtocolConfig {}
+pub struct ArcConfig {
+    pub inner: Arc<KamilataConfig>,
+}
 
-impl KamilataProtocolConfig {
-    // TODO: remove because used too often
-    pub fn new() -> KamilataProtocolConfig {
-        KamilataProtocolConfig {}
+impl From<&Arc<KamilataConfig>> for ArcConfig {
+    fn from(inner: &Arc<KamilataConfig>) -> Self {
+        Self { inner: Arc::clone(inner) }
     }
 }
 
-impl UpgradeInfo for KamilataProtocolConfig {
-    type Info = &'static [u8];
-    type InfoIter = std::iter::Once<Self::Info>;
+impl UpgradeInfo for ArcConfig {
+    type Info = String;
+    type InfoIter = std::vec::IntoIter<std::string::String>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(b"/kamilata/0.0.1")
+        self.inner.protocol_names.clone().into_iter()
     }
 }
 
 pub(crate) type KamInStreamSink<S> = KadStreamSink<S, ResponsePacket, RequestPacket>;
 pub(crate) type KamOutStreamSink<S> = KadStreamSink<S, RequestPacket, ResponsePacket>;
 
-impl<S> InboundUpgrade<S> for KamilataProtocolConfig
+impl<S> InboundUpgrade<S> for ArcConfig
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -59,7 +59,7 @@ where
     }
 }
 
-impl<S> OutboundUpgrade<S> for KamilataProtocolConfig
+impl<S> OutboundUpgrade<S> for ArcConfig
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {

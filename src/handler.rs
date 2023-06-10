@@ -32,13 +32,13 @@ pub struct KamilataHandler<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
     db: Arc<Db<N, S>>,
+    config: Arc<KamilataConfig>,
 
     rt_handle: tokio::runtime::Handle,
     
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
-    ///     0: routing initialization
     ///     1: filter broadcaster
     ///     2: filter receiver
     tasks: HashMap<u32, HandlerTask>,
@@ -47,14 +47,16 @@ pub struct KamilataHandler<const N: usize, S: Store<N>> {
 }
 
 impl<const N: usize, S: Store<N>> KamilataHandler<N, S> {
-    pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, S>>) -> Self {
-        let rt_handle = tokio::runtime::Handle::current();
-        let task_counter = Counter::new(3);
-        let tasks: HashMap<u32, HandlerTask> = HashMap::new();
-        let pending_tasks = Vec::new();
-
+    pub(crate) fn new(our_peer_id: PeerId, remote_peer_id: PeerId, db: Arc<Db<N, S>>, config: Arc<KamilataConfig>) -> Self {
         KamilataHandler {
-            our_peer_id, remote_peer_id, db, rt_handle, task_counter, tasks, pending_tasks
+            our_peer_id,
+            remote_peer_id,
+            db,
+            config,
+            rt_handle: tokio::runtime::Handle::current(),
+            task_counter: Counter::new(3),
+            tasks: HashMap::new(),
+            pending_tasks: Vec::new(),
         }
     }
 }
@@ -63,13 +65,13 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     type InEvent = HandlerInEvent;
     type OutEvent = HandlerOutEvent;
     type Error = ioError;
-    type InboundProtocol = Either<KamilataProtocolConfig, DeniedUpgrade>;
-    type OutboundProtocol = KamilataProtocolConfig;
+    type InboundProtocol = Either<ArcConfig, DeniedUpgrade>;
+    type OutboundProtocol = ArcConfig;
     type InboundOpenInfo = ();
     type OutboundOpenInfo = (Option<(u32, bool)>, PendingHandlerTask<Box<dyn Any + Send>>);
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
-        SubstreamProtocol::new(KamilataProtocolConfig::new(), ()).map_upgrade(Either::Left)
+        SubstreamProtocol::new(ArcConfig::from(&self.config), ()).map_upgrade(Either::Left)
     }
 
     // Events are sent by the Behaviour which we need to obey to.
@@ -194,7 +196,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
 
         if let Some((tid, pending_task)) = self.pending_tasks.pop() {
             return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
-                protocol: SubstreamProtocol::new(KamilataProtocolConfig::new(), (tid, pending_task)),
+                protocol: SubstreamProtocol::new(ArcConfig::from(&self.config), (tid, pending_task)),
             })
         }
 

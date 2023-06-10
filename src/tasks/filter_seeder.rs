@@ -18,7 +18,7 @@ pub(crate) async fn seed_filters<const N: usize, S: Store<N>>(
     }
 
     // Determine an interval
-    let config = db.get_config().await;
+    let config = db.get_config();
     req.filter_count = req.filter_count.clamp(0, config.filter_count as u8); // unsafe cast
     let interval = match config.get_filters_interval.intersection(&req.interval) {
         Some(interval) => interval.target() as u64,
