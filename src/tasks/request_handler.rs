@@ -23,7 +23,7 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
             let task = seed_filters(stream, refresh_packet, db, our_peer_id, remote_peer_id);
             HandlerTaskOutput::SetTask {
                 tid: 1,
-                task: HandlerTask { fut: Box::pin(task), name: "broadcast_filters" },
+                task: HandlerTask { fut: Box::pin(task), name: "seed_filters" },
             }
         },
         RequestPacket::Search(search_packet) => {

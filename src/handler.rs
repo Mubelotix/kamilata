@@ -89,8 +89,12 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                 self.pending_tasks.push((None, pending_task));
             },
             HandlerInEvent::LeechFilters => {
+                if self.tasks.contains_key(&2) || self.pending_tasks.iter().any(|(_, pending_task)| pending_task.name == "leech_filters") {
+                    trace!("{} Already leeching filters from {}", self.our_peer_id, self.remote_peer_id);
+                    return;
+                }
                 let pending_task = pending_leech_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
-                self.pending_tasks.push((None, pending_task))
+                self.pending_tasks.push((Some((2, true)), pending_task))
             },
             HandlerInEvent::StopLeeching => {
                 self.pending_tasks.retain(|(_, pending_task)| pending_task.name != "leech_filters");

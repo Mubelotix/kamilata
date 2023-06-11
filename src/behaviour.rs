@@ -131,6 +131,8 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
         self.db.leecher_count().await
     }
 
+    /// Starts leeching from a peer.
+    /// If we already leech from this peer, this function does nothing.
     pub fn leech_from(&mut self, seeder: PeerId) {
         self.handler_event_queue.push((seeder, HandlerInEvent::LeechFilters));
     }
