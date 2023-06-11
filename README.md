@@ -14,13 +14,6 @@
 
 <p align="center">A Peer-to-Peer Search Engine System</p>
 
-
-## Abstract
-
-Search engines have always been quintessentially centralized systems. The need for a central database to store and index gigantic amounts of data has consecrated big companies as the only ones able to provide such a service. After years of accumulating power and influence, these same companies have started abusing their position, manipulating search results, censoring content, and spying on their users. As those in control of searches rule which content is reachable, they have become the new gatekeepers of the Internet.
-
-A purely peer-to-peer version of a search engine would allow the search of data without the need of relying on any authority. The network formed by users would be directly in charge of the content, with no intermediaries. This is Kamilata. It features a routing algorithm for redirecting search queries to the peers that are most likely to have matching results. Thanks to this approach, no central index is required. As a result, peers can join and leave the network freely, without any coordination needed at the network level. 
-
 ## Scope
 
 This project is an implementation of the Kamilata protocol. It takes the form of a library that you can easily plug into your own platform. This library provides a simple yet very powerful API to index any document you might have.
@@ -37,6 +30,8 @@ Kamilata is relevant and able to provide a good search experience if *one* of th
 - Queries are specific (a few words)
 - The corpus is small (less than a million documents)
 - There are significant popularity differences between documents
+
+Kamilata powers the [Admarus IPFS search engine](https://github.com/mubelotix/admarus-daemon).
 
 ## General Technical Description
 
