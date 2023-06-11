@@ -106,6 +106,19 @@ pub struct KamilataConfig {
     /// 
     /// Note that the `max_leechers` limit is always enforced.
     /// As a result, a peer might be rejected even after this closure returns true.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// # use {std::{pin::Pin, future::Future}, libp2p::PeerId, kamilata::config::*};
+    /// fn approve_leecher(peer_id: PeerId) -> Pin<Box<dyn Future<Output = bool> + Send>> {
+    ///     Box::pin(async move {
+    ///        // TODO
+    /// #      true
+    ///     })
+    /// }
+    /// # let t: ApproveLeecher = Box::new(approve_leecher);
+    /// ```
     pub approve_leecher: Option<ApprocheLeecherClosure>,
 }
 
