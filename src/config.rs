@@ -117,7 +117,7 @@ pub struct KamilataConfig {
     /// #      true
     ///     })
     /// }
-    /// # let t: ApproveLeecher = Box::new(approve_leecher);
+    /// # let t: ApprocheLeecherClosure = Box::new(approve_leecher);
     /// ```
     pub approve_leecher: Option<ApprocheLeecherClosure>,
 }
