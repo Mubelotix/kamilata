@@ -62,6 +62,6 @@ pub(crate) fn pending_leech_filters<const N: usize, S: Store<N>>(db: Arc<Db<N, S
     PendingHandlerTask {
         params: Box::new((db, our_peer_id, remote_peer_id)),
         fut: leech_filters_boxed::<N, S>,
-        name: "get_filters",
+        name: "leech_filters",
     }
 }

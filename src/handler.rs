@@ -11,6 +11,10 @@ pub enum HandlerInEvent {
     },
     /// Asks the handler to leech filters
     LeechFilters,
+    /// Asks the handler to stop leeching
+    StopLeeching,
+    /// Asks the handler to stop seeding
+    StopSeeding,
 }
 
 impl std::fmt::Debug for HandlerInEvent {
@@ -18,6 +22,8 @@ impl std::fmt::Debug for HandlerInEvent {
         match self {
             HandlerInEvent::Request { .. } => write!(f, "Request"),
             HandlerInEvent::LeechFilters => write!(f, "LeechFilters"),
+            HandlerInEvent::StopLeeching => write!(f, "StopLeeching"),
+            HandlerInEvent::StopSeeding => write!(f, "StopSeeding"),
         }
     }
 }
@@ -39,8 +45,8 @@ pub struct KamilataHandler<const N: usize, S: Store<N>> {
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
     /// Reserved IDs:
-    ///     1: filter broadcaster
-    ///     2: filter receiver
+    ///     1: filter seeder
+    ///     2: filter leecher
     tasks: HashMap<u32, HandlerTask>,
     /// Tasks waiting to be inserted into the `tasks` map, because their outbound substream is still opening.
     pending_tasks: Vec<(Option<(u32, bool)>, PendingHandlerTask<Box<dyn Any + Send>>)>,
@@ -76,6 +82,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
 
     // Events are sent by the Behaviour which we need to obey to.
     fn on_behaviour_event(&mut self, event: Self::InEvent) {
+        trace!("{} Received event: {event:?}", self.our_peer_id);
         match event {
             HandlerInEvent::Request { request, sender } => {
                 let pending_task = pending_request::<N>(request, sender, self.our_peer_id, self.remote_peer_id);
@@ -84,7 +91,26 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
             HandlerInEvent::LeechFilters => {
                 let pending_task = pending_leech_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((None, pending_task))
-            }
+            },
+            HandlerInEvent::StopLeeching => {
+                self.pending_tasks.retain(|(_, pending_task)| pending_task.name != "leech_filters");
+                if self.tasks.remove(&2).is_some() {
+                    let behaviour_controller = self.db.behaviour_controller().clone();
+                    let remote_peer_id = self.remote_peer_id;
+                    tokio::spawn(async move {
+                        behaviour_controller.emit_event(KamilataEvent::SeederRemoved { peer_id: remote_peer_id }).await;
+                    });
+                }
+            },
+            HandlerInEvent::StopSeeding => {
+                if self.tasks.remove(&1).is_some() {
+                    let behaviour_controller = self.db.behaviour_controller().clone();
+                    let remote_peer_id = self.remote_peer_id;
+                    tokio::spawn(async move {
+                        behaviour_controller.emit_event(KamilataEvent::LeecherRemoved { peer_id: remote_peer_id }).await;
+                    });
+                }
+            },
         };
     }
 
@@ -159,6 +185,24 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                 Poll::Ready(output) => {
                     trace!("{} Task {} completed (tid={tid})", self.our_peer_id, task.name);
                     self.tasks.remove(&tid);
+                    
+                    match tid {
+                        1 => {
+                            let behaviour_controller = self.db.behaviour_controller().clone();
+                            let remote_peer_id = self.remote_peer_id;
+                            tokio::spawn(async move {
+                                behaviour_controller.emit_event(KamilataEvent::LeecherRemoved { peer_id: remote_peer_id }).await;
+                            });
+                        }
+                        2 => {
+                            let behaviour_controller = self.db.behaviour_controller().clone();
+                            let remote_peer_id = self.remote_peer_id;
+                            tokio::spawn(async move {
+                                behaviour_controller.emit_event(KamilataEvent::SeederRemoved { peer_id: remote_peer_id }).await;
+                            });
+                        }
+                        _ => ()
+                    }
 
                     for output in output.into_vec() {
                         match output {

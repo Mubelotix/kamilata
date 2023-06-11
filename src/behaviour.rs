@@ -4,8 +4,17 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub enum KamilataEvent {
     // TODO unroutable, routable and pending
+
+    /// Sent when we start seeding to a peer.
     LeecherAdded { peer_id: PeerId, filter_count: usize, interval_ms: usize },
+    /// Sent when we start leeching from a peer.
     SeederAdded { peer_id: PeerId },
+    /// Sent when a seeding task is aborted.
+    /// This can happen even if LeecherAdded was not sent.
+    LeecherRemoved { peer_id: PeerId },
+    /// Sent when a leeching task is aborted.
+    /// This can happen even if SeederAdded was not sent.
+    SeederRemoved { peer_id: PeerId },
 }
 
 /// Implementation of the Kamilata protocol.
@@ -124,6 +133,14 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
 
     pub fn leech_from(&mut self, seeder: PeerId) {
         self.handler_event_queue.push((seeder, HandlerInEvent::LeechFilters));
+    }
+
+    pub fn stop_leeching(&mut self, seeder: PeerId) {
+        self.handler_event_queue.push((seeder, HandlerInEvent::StopLeeching));
+    }
+
+    pub fn stop_seeding(&mut self, seeder: PeerId) {
+        self.handler_event_queue.push((seeder, HandlerInEvent::StopSeeding));
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
