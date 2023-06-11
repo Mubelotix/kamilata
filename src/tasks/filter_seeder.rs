@@ -38,11 +38,18 @@ pub(crate) async fn seed_filters<const N: usize, S: Store<N>>(
         }
     };
 
+    // Send an event
+    db.behaviour_controller().emit_event(KamilataEvent::LeecherAdded {
+        peer_id: remote_peer_id,
+        filter_count: req.filter_count as usize,
+        interval_ms: interval as usize,
+    }).await;
+
     let mut peers_to_ignore = req.blocked_peers.to_libp2p_peer_ids();
     peers_to_ignore.push(remote_peer_id);
 
     loop {
-        let our_filters = db.get_filters_bytes(&peers_to_ignore).await;
+        let our_filters = db.get_filters_bytes(&peers_to_ignore).await; // FIXME: filter count isn't respected
         stream.start_send_unpin(ResponsePacket::UpdateFilters(UpdateFiltersPacket { filters: our_filters })).unwrap();
         stream.flush().await.unwrap();
         trace!("{our_peer_id} Sent filters to {remote_peer_id}");

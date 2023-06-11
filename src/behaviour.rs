@@ -4,7 +4,8 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub enum KamilataEvent {
     // TODO unroutable, routable and pending
-    UnroutablePeer(PeerId),
+    LeecherAdded { peer_id: PeerId, filter_count: usize, interval_ms: usize },
+    SeederAdded { peer_id: PeerId },
 }
 
 /// Implementation of the Kamilata protocol.
@@ -50,12 +51,15 @@ impl<const N: usize, S: Store<N> + Default> KamilataBehaviour<N, S> {
     pub fn new_with_config(our_peer_id: PeerId, config: KamilataConfig) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
+        let db_behaviour_controller = BehaviourController {
+            sender: control_msg_sender.clone(),
+        };
         let config = Arc::new(config);
 
         KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new(Arc::clone(&config), S::default())),
+            db: Arc::new(Db::new(Arc::clone(&config), S::default(), db_behaviour_controller)),
             config,
             control_msg_sender,
             control_msg_receiver,
@@ -76,12 +80,15 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
     pub fn new_with_config_and_store(our_peer_id: PeerId, config: KamilataConfig, store: S) -> KamilataBehaviour<N, S> {
         let rt_handle = tokio::runtime::Handle::current();
         let (control_msg_sender, control_msg_receiver) = channel(100);
+        let db_behaviour_controller = BehaviourController {
+            sender: control_msg_sender.clone(),
+        };
         let config = Arc::new(config);
 
         KamilataBehaviour {
             our_peer_id,
             connected_peers: Vec::new(),
-            db: Arc::new(Db::new(Arc::clone(&config), store)),
+            db: Arc::new(Db::new(Arc::clone(&config), store, db_behaviour_controller)),
             config,
             control_msg_sender,
             control_msg_receiver,
@@ -105,6 +112,12 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
         self.db.seeder_count().await
     }
 
+    fn new_controller(&self) -> BehaviourController {
+        BehaviourController {
+            sender: self.control_msg_sender.clone(),
+        }
+    }
+
     pub async fn leecher_count(&self) -> usize {
         self.db.leecher_count().await
     }
@@ -126,12 +139,9 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
     /// Starts a new search with custom [SearchConfig] and returns an [handler](OngoingSearchControler) to control it.
     pub async fn search_with_config(&mut self, queries: impl Into<SearchQueries>, config: SearchConfig) -> OngoingSearchController<S::SearchResult> {
         let queries = queries.into();
-        let handler_messager = BehaviourController {
-            sender: self.control_msg_sender.clone(),
-        };
         let search_state = OngoingSearchState::new(queries, config);
         let (search_controler, search_follower) = search_state.into_pair::<S::SearchResult>();
-        self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, handler_messager, Arc::clone(&self.db), self.our_peer_id)));
+        self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, self.new_controller(), Arc::clone(&self.db), self.our_peer_id)));
         search_controler
     }
 
@@ -191,33 +201,33 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
     }
 
     fn on_connection_handler_event(
-            &mut self,
-            _peer_id: PeerId,
-            _connection_id: ConnectionId,
-            event: THandlerOutEvent<Self>,
-        ) {
+        &mut self,
+        _peer_id: PeerId,
+        _connection_id: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
         match event {
 
         }
     }
 
     fn handle_established_inbound_connection(
-            &mut self,
-            _connection_id: ConnectionId,
-            remote_peer_id: PeerId,
-            _local_addr: &Multiaddr,
-            _remote_addr: &Multiaddr,
-        ) -> Result<THandler<Self>, ConnectionDenied> {
+        &mut self,
+        _connection_id: ConnectionId,
+        remote_peer_id: PeerId,
+        _local_addr: &Multiaddr,
+        _remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(KamilataHandler::new(self.our_peer_id, remote_peer_id, Arc::clone(&self.db), Arc::clone(&self.config)))
     }
 
     fn handle_established_outbound_connection(
-            &mut self,
-            _connection_id: ConnectionId,
-            peer: PeerId,
-            _addr: &Multiaddr,
-            _role_override: Endpoint,
-        ) -> Result<THandler<Self>, ConnectionDenied> {
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        _addr: &Multiaddr,
+        _role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(KamilataHandler::new(self.our_peer_id, peer, Arc::clone(&self.db), Arc::clone(&self.config)))
     }
 
@@ -236,26 +246,13 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
                 }
             );
         }
-        while let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
+        if let Poll::Ready(Some(control_message)) = self.control_msg_receiver.poll_recv(cx) {
             match control_message {
-                BehaviourControlMessage::MessageHandler(peer_id, event) => return Poll::Ready(
-                    ToSwarm::NotifyHandler {
-                        peer_id,
-                        handler: libp2p::swarm::NotifyHandler::Any,
-                        event
-                    }
-                ),
-                BehaviourControlMessage::DialPeer(peer_id, addresses) => {
-                    // Ignore if we are already connected to the peer.
-                    if self.connected_peers.contains(&peer_id) {
-                        continue;
-                    }
+                BehaviourControlMessage::OutputEvent(event) => {
                     return Poll::Ready(
-                        ToSwarm::Dial {
-                            opts: libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id).addresses(addresses).build(),
-                        }
-                    )
-                },
+                        ToSwarm::GenerateEvent(event)
+                    );
+                }
                 BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, event) => {
                     // Just notify the handler directly if we are already connected to the peer.
                     trace!("{} Dialing peer {peer_id} with addresses {addresses:?} and sending message", self.our_peer_id);
@@ -306,9 +303,8 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
 /// Internal control messages send by [BehaviourController] to [KamilataBehaviour]
 #[derive(Debug)]
 pub(crate) enum BehaviourControlMessage {
-    MessageHandler(PeerId, HandlerInEvent),
-    DialPeer(PeerId, Vec<Multiaddr>),
     DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent),
+    OutputEvent(KamilataEvent),
 }
 
 /// A struct that allows to send messages to an [handler](ConnectionHandler)
@@ -318,18 +314,13 @@ pub(crate) struct BehaviourController {
 }
 
 impl BehaviourController {
-    /// Sends a message to the handler.
-    pub async fn message_handler(&self, peer_id: PeerId, message: HandlerInEvent) {
-        self.sender.send(BehaviourControlMessage::MessageHandler(peer_id, message)).await.unwrap();
-    }
-
-    /// Requests behaviour to dial a peer.
-    pub async fn dial_peer(&self, peer_id: PeerId, addresses: Vec<Multiaddr>) {
-        self.sender.send(BehaviourControlMessage::DialPeer(peer_id, addresses)).await.unwrap();
-    }
-
     /// Requests behaviour to dial a peer and send a message to it.
     pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent) {
         self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await.unwrap();
+    }
+
+    /// Outputs an event from the behaviour.
+    pub async fn emit_event(&self, event: KamilataEvent) {
+        self.sender.send(BehaviourControlMessage::OutputEvent(event)).await.unwrap();
     }
 }

@@ -21,6 +21,11 @@ pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOu
     stream.start_send_unpin(RequestPacket::GetFilters(req)).unwrap();
     stream.flush().await.unwrap();
 
+    // Send an event
+    db.behaviour_controller().emit_event(KamilataEvent::SeederAdded {
+        peer_id: remote_peer_id,
+    }).await;
+
     // Receive filters
     loop {
         let packet = match stream.next().await {
