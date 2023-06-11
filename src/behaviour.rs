@@ -191,14 +191,16 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
-                if let ConnectedPoint::Dialer { address, .. } = info.endpoint {
-                    let db2 = Arc::clone(&self.db);
-                    let peer_id = info.peer_id;
-                    let addr = address.to_owned();
-                    tokio::spawn(async move {
-                        db2.add_peer(peer_id, vec![addr]).await;
-                    });
-                }
+                let addrs = if let ConnectedPoint::Dialer { address, .. } = info.endpoint {
+                    vec![address.to_owned()]
+                } else {
+                    Vec::new()
+                };
+                let db2 = Arc::clone(&self.db);
+                let peer_id = info.peer_id;
+                tokio::spawn(async move {
+                    db2.add_peer(peer_id, addrs).await;
+                });
             },
             FromSwarm::DialFailure(info) => {
                 if let Some(peer_id) = info.peer_id {
