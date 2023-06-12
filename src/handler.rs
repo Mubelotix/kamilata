@@ -125,7 +125,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     #[warn(implied_bounds_entailment)]
     fn on_connection_event(
         &mut self,
-        event: libp2p::swarm::handler::ConnectionEvent<
+        event: ConnectionEvent<
             Self::InboundProtocol,
             Self::OutboundProtocol,
             Self::InboundOpenInfo,
@@ -134,7 +134,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     ) {
         match event {
             // When we receive an inbound channel, a task is immediately created to handle the channel.
-            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedInbound(i) => {
+            ConnectionEvent::FullyNegotiatedInbound(i) => {
                 let substream = match i.protocol {
                     futures::future::Either::Left(s) => s,
                     futures::future::Either::Right(_void) => return,
@@ -145,7 +145,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                 self.tasks.insert(self.task_counter.next(), HandlerTask { fut, name: "handle_request" });
             },
             // Once an outbound is fully negotiated, the pending task which requested the establishment of the channel is now ready to be executed.
-            libp2p::swarm::handler::ConnectionEvent::FullyNegotiatedOutbound(i) => {
+            ConnectionEvent::FullyNegotiatedOutbound(i) => {
                 let (tid, pending_task) = i.info;
                 let fut = (pending_task.fut)(i.protocol, pending_task.params);
                 let (tid, replace) = tid.unwrap_or_else(|| (self.task_counter.next(), true));
@@ -156,13 +156,12 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                     warn!("{} Replaced {} task with {} task at tid={tid}", self.our_peer_id, old_task.name, pending_task.name)
                 }        
             },
-            libp2p::swarm::handler::ConnectionEvent::AddressChange(_) => todo!(),
-            libp2p::swarm::handler::ConnectionEvent::DialUpgradeError(i) => {
+            ConnectionEvent::DialUpgradeError(i) => {
                 let (_tid, pending_task) = i.info;
                 let error = i.error;
                 warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, pending_task.name);
             },
-            libp2p::swarm::handler::ConnectionEvent::ListenUpgradeError(_) => todo!(),
+            ConnectionEvent::ListenUpgradeError(_) | ConnectionEvent::AddressChange(_) => (),
         }
     }
 
