@@ -71,7 +71,7 @@ async fn speed_priority() {
 
     info!("Searching with speed priority...");
     let results = controller1.search_with_config(
-        ["perfect match", "match"].as_slice(),
+        ["perfectly", "matching"].as_slice(),
         SearchConfig::default().with_priority(SearchPriority::speed()).with_req_limit(1)
     ).await;
     let hits = results.hits.into_iter().map(|h| h.0).collect::<Vec<_>>();
@@ -84,7 +84,7 @@ async fn relevance_priority() {
 
     info!("Searching with relevance priority...");
     let results = controller1.search_with_config(
-        ["perfect match", "match"].as_slice(),
+        ["perfectly", "matching"].as_slice(),
         SearchConfig::default().with_priority(SearchPriority::relevance()).with_req_limit(1)
     ).await;
     let hits = results.hits.into_iter().map(|h| h.0).collect::<Vec<_>>();
