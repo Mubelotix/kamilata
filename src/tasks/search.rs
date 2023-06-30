@@ -3,7 +3,6 @@
 use super::*;
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
-use std::thread::spawn;
 
 // Constants for each [FixedSearchPriority]. They are used as const generics.
 const ANY: usize = 0;
@@ -260,7 +259,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
     let db2 = db.clone();
     let queries2 = queries.clone();
     let search_follower2 = search_follower.clone();
-    spawn(move || async move {
+    spawn(async move {
         let mut cids = HashSet::new();
         for (query, fut) in queries2.inner.clone().into_iter().map(|(words, min_matching)| db2.store().search(words, min_matching)).enumerate() {
             let mut stream = fut.await;
