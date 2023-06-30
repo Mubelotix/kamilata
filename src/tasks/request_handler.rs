@@ -43,6 +43,7 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                     }
                 }
             }
+            info!("{} local matches", local_matches.len());
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {
@@ -58,12 +59,10 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
 
             let mut matches = Vec::new();
             for (query_id, result) in local_matches.into_iter() {
-                if cids.insert(result.cid()) {
-                    matches.push(LocalMatch {
-                        query: query_id as u16,
-                        result: result.into_bytes(),
-                    })
-                }
+                matches.push(LocalMatch {
+                    query: query_id as u16,
+                    result: result.into_bytes(),
+                })
             }
             stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
                 distant_matches,
