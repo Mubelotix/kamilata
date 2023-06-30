@@ -29,7 +29,7 @@ pub(crate) use libp2p::{
 pub(crate) use log::{debug, error, info, trace, warn};
 pub(crate) use std::{
     any::Any,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     io::Error as ioError,
     pin::Pin,
     sync::Arc,

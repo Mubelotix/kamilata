@@ -110,18 +110,18 @@ impl Default for SearchConfig {
     }
 }
 
-pub(crate) struct OngoingSearchState {
-    queries: SearchQueries,
+pub(crate) struct OngoingSearchState<const N: usize, S: Store<N>> {
+    query: Arc<S::Query>,
     config: SearchConfig,
     queried_peers: usize,
     final_peers: usize,
     ongoing_queries: usize,
 }
 
-impl OngoingSearchState {
-    pub(crate) fn new(queries: SearchQueries, config: SearchConfig) -> OngoingSearchState {
+impl<const N: usize, S: Store<N>> OngoingSearchState<N, S> {
+    pub(crate) fn new(query: S::Query, config: SearchConfig) -> OngoingSearchState<N, S> {
         OngoingSearchState {
-            queries,
+            query: Arc::new(query),
             config,
             queried_peers: 0,
             final_peers: 0,
@@ -129,7 +129,7 @@ impl OngoingSearchState {
         }
     }
 
-    pub(crate) fn into_pair<T: SearchResult>(self) -> (OngoingSearchController<T>, OngoingSearchFollower<T>) {
+    pub(crate) fn into_pair(self) -> (OngoingSearchController<N, S>, OngoingSearchFollower<N, S>) {
         let (sender, receiver) = channel(100);
         let inner = Arc::new(RwLock::new(self));
 
@@ -148,30 +148,30 @@ impl OngoingSearchState {
 
 /// A search controller is an handle to an ongoing search, started with [KamilataBehaviour::search].
 /// It allows getting results asynchronously, and to control the search.
-pub struct OngoingSearchController<T: SearchResult> {
-    receiver: Receiver<(T, usize, PeerId)>,
-    inner: Arc<RwLock<OngoingSearchState>>,
+pub struct OngoingSearchController<const N: usize, S: Store<N>> {
+    receiver: Receiver<(S::Result, PeerId)>,
+    inner: Arc<RwLock<OngoingSearchState<N, S>>>,
 }
 
-pub(crate) struct OngoingSearchFollower<T: SearchResult> {
-    sender: Sender<(T, usize, PeerId)>,
-    inner: Arc<RwLock<OngoingSearchState>>,
+pub(crate) struct OngoingSearchFollower<const N: usize, S: Store<N>> {
+    sender: Sender<(S::Result, PeerId)>,
+    inner: Arc<RwLock<OngoingSearchState<N, S>>>,
 }
 
-impl<T: SearchResult> OngoingSearchController<T> {
+impl<const N: usize, S: Store<N>> OngoingSearchController<N, S> {
     /// Waits for the next search result.
-    pub async fn recv(&mut self) -> Option<(T, usize, PeerId)> {
+    pub async fn recv(&mut self) -> Option<(S::Result, PeerId)> {
         self.receiver.recv().await
     }
 
     /// Returns the next search result if available.
-    pub fn try_recv(&mut self) -> Result<(T, usize, PeerId), tokio::sync::mpsc::error::TryRecvError> {
+    pub fn try_recv(&mut self) -> Result<(S::Result, PeerId), tokio::sync::mpsc::error::TryRecvError> {
         self.receiver.try_recv()
     }
 
     /// Returns a copy of the ongoing queries.
-    pub async fn queries(&self) -> SearchQueries {
-        self.inner.read().await.queries.clone()
+    pub async fn query(&self) -> Arc<S::Query> {
+        Arc::clone(&self.inner.read().await.query)
     }
 
     /// Returns the current search config.
@@ -220,7 +220,7 @@ impl<T: SearchResult> OngoingSearchController<T> {
     }
 
     /// Stops the search and returns all search results that have not been consumed yet.
-    pub async fn finish(mut self) -> SearchResults<T> {
+    pub async fn finish(mut self) -> SearchResults<S::Result> {
         let mut search_results = Vec::new();
         while let Ok(search_result) = self.try_recv() {
             search_results.push(search_result);
@@ -236,15 +236,15 @@ impl<T: SearchResult> OngoingSearchController<T> {
     }
 }
 
-impl<T: SearchResult> OngoingSearchFollower<T> {
+impl<const N: usize, S: Store<N>> OngoingSearchFollower<N, S> {
     /// Sends a search result to the controler.
-    pub async fn send(&self, search_result: (T, usize, PeerId)) -> Result<(), tokio::sync::mpsc::error::SendError<(T, usize, PeerId)>> {
+    pub async fn send(&self, search_result: (S::Result, PeerId)) -> Result<(), tokio::sync::mpsc::error::SendError<(S::Result, PeerId)>> {
         self.sender.send(search_result).await
     }
 
     /// Returns a copy of the ongoing queries.
-    pub async fn queries(&self) -> SearchQueries {
-        self.inner.read().await.queries.clone()
+    pub async fn query(&self) -> Arc<S::Query> {
+        Arc::clone(&self.inner.read().await.query)
     }
 
     /// Returns the current search config.
@@ -261,7 +261,7 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     }
 }
 
-impl<T: SearchResult> Clone for OngoingSearchFollower<T> {
+impl<const N: usize, S: Store<N>> Clone for OngoingSearchFollower<N, S> {
     fn clone(&self) -> Self {
         OngoingSearchFollower {
             sender: self.sender.clone(),
@@ -275,7 +275,7 @@ impl<T: SearchResult> Clone for OngoingSearchFollower<T> {
 pub struct SearchResults<T: SearchResult> {
     /// Contains search results in the order they were received.
     /// Results that have already been [received](OngoingSearchControler::recv) are not included.
-    pub hits: Vec<(T, usize, PeerId)>,
+    pub hits: Vec<(T, PeerId)>,
     /// Numbers of peers that have been queried
     pub queried_peers: usize,
     /// Numbers of peers that have been able to provide us with hits

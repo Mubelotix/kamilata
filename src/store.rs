@@ -17,7 +17,8 @@ pub type ResultStreamBuilderFut<SearchResult> = Pin<Box<dyn Future<Output = Resu
 /// This trait must be implemented on your document store.
 #[async_trait]
 pub trait Store<const N: usize>: Send + Sync + 'static {
-    type SearchResult: SearchResult + Send + Sync;
+    type Result: SearchResult + Send + Sync;
+    type Query: SearchQuery<N>;
     
     /// Hash a word the way you like.
     /// You can return multiple hashes for a single input (it's the idea behind Bloom filters).
@@ -33,5 +34,5 @@ pub trait Store<const N: usize>: Send + Sync + 'static {
     /// Search among all documents and return those matching at least `min_matching` words.
     /// 
     /// The return type is a future to a stream of results.
-    fn search(&self, words: Vec<String>, min_matching: usize) -> ResultStreamBuilderFut<Self::SearchResult>;
+    fn search(&self, query: Arc<Self::Query>) -> ResultStreamBuilderFut<Self::Result>;
 }

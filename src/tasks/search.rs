@@ -14,44 +14,44 @@ const RELEVANCE: usize = 2;
 #[derive(Debug, PartialEq, Eq)]
 struct ProviderInfo<const PRIORITY: usize> {
     peer_id: PeerId,
-    queries: Vec<Option<usize>>,
+    match_scores: Vec<u32>,
     addresses: Vec<Multiaddr>,
 }
 
 /// A trait allowing APIs over any [ProviderInfo], regardless of the priority.
 trait AnyProviderInfo: Sized {
-    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>);
+    fn into_parts(self) -> (PeerId, Vec<u32>, Vec<Multiaddr>);
     fn into_whatever(self) -> ProviderInfo<ANY> {
         let (peer_id, queries, addresses) = self.into_parts();
-        ProviderInfo { peer_id, queries, addresses }
+        ProviderInfo { peer_id, match_scores: queries, addresses }
     }
     fn into_speed(self) -> ProviderInfo<SPEED> {
         let (peer_id, queries, addresses) = self.into_parts();
-        ProviderInfo { peer_id, queries, addresses }
+        ProviderInfo { peer_id, match_scores: queries, addresses }
     }
     fn into_relevance(self) -> ProviderInfo<RELEVANCE> {
         let (peer_id, queries, addresses) = self.into_parts();
-        ProviderInfo { peer_id, queries, addresses }
+        ProviderInfo { peer_id, match_scores: queries, addresses }
     }
 }
 
 impl AnyProviderInfo for ProviderInfo<ANY> {
-    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
-        (self.peer_id, self.queries, self.addresses)
+    fn into_parts(self) -> (PeerId, Vec<u32>, Vec<Multiaddr>) {
+        (self.peer_id, self.match_scores, self.addresses)
     }
 }
 impl AnyProviderInfo for ProviderInfo<SPEED> {
-    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
-        (self.peer_id, self.queries, self.addresses)
+    fn into_parts(self) -> (PeerId, Vec<u32>, Vec<Multiaddr>) {
+        (self.peer_id, self.match_scores, self.addresses)
     }
 }
 impl AnyProviderInfo for ProviderInfo<RELEVANCE> {
-    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
-        (self.peer_id, self.queries, self.addresses)
+    fn into_parts(self) -> (PeerId, Vec<u32>, Vec<Multiaddr>) {
+        (self.peer_id, self.match_scores, self.addresses)
     }
 }
-impl AnyProviderInfo for (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
-    fn into_parts(self) -> (PeerId, Vec<Option<usize>>, Vec<Multiaddr>) {
+impl AnyProviderInfo for (PeerId, Vec<u32>, Vec<Multiaddr>) {
+    fn into_parts(self) -> (PeerId, Vec<u32>, Vec<Multiaddr>) {
         self
     }
 }
@@ -111,30 +111,12 @@ impl ProviderBinaryHeap {
 }
 
 impl<const PRIORITY: usize> ProviderInfo<PRIORITY> {
-    fn nearest(&self) -> Option<(usize, usize)> {
-        let mut nearest = None;
-        for (query, dist) in self.queries.iter().enumerate() {
-            if let Some(dist) = dist {
-                match nearest {
-                    None => nearest = Some((query, *dist)),
-                    Some((_, min_dist)) => {
-                        if *dist < min_dist {
-                            nearest = Some((query, *dist));
-                        }
-                    }
-                }
-            }
-        }
-        nearest
+    fn nearest(&self) -> Option<(usize, u32)> {
+        self.match_scores.iter().enumerate().find(|(_, score)| **score > 0).map(|(dist, score)| (dist, *score))
     }
 
-    fn best(&self) -> Option<(usize, usize)> {
-        for (query, dist) in self.queries.iter().enumerate() {
-            if let Some(dist) = dist {
-                return Some((query, *dist))
-            }
-        }
-        None
+    fn best(&self) -> Option<(usize, u32)> {
+        self.match_scores.iter().enumerate().max_by_key(|(_, score)| **score).map(|(dist, score)| (dist, *score))
     }
 }
 
@@ -144,8 +126,8 @@ impl std::cmp::Ord for ProviderInfo<SPEED> {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some((query1, dist1)), Some((query2, dist2))) => match dist1.cmp(&dist2) {
-                Ordering::Equal => query1.cmp(&query2).reverse(),
+            (Some((dist1, score1)), Some((dist2, score2))) => match dist1.cmp(&dist2) {
+                Ordering::Equal => score1.cmp(&score2).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
             },
@@ -163,7 +145,7 @@ impl std::cmp::Ord for ProviderInfo<RELEVANCE> {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some((query1, dist1)), Some((query2, dist2))) => match query1.cmp(&query2) {
+            (Some((dist1, score1)), Some((dist2, score2))) => match score1.cmp(&score2) {
                 Ordering::Equal => dist1.cmp(&dist2).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
@@ -176,27 +158,17 @@ impl std::cmp::PartialOrd for ProviderInfo<RELEVANCE> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-struct QueryResult<S: SearchResult> {
-    result: S,
-    query: usize,
-}
-
 async fn search_one<const N: usize, S: Store<N>>(
-    queries: SearchQueries,
+    query: Arc<S::Query>,
     behaviour_controller: BehaviourController,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> Option<(PeerId, Vec<QueryResult<S::SearchResult>>,  Vec<ProviderInfo<ANY>>)> {
+) -> Option<(PeerId, Vec<S::Result>,  Vec<ProviderInfo<ANY>>)> {
     debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
-    let request = RequestPacket::Search(SearchPacket {
-        queries: queries.inner.into_iter().map(|(words, min_matching)| Query {
-            words,
-            min_matching: min_matching as u16
-        }).collect()
-    });
+    let request = RequestPacket::Search(SearchPacket { query: query.to_bytes() }); // TODO: remove conversion
     let (sender, receiver) = oneshot_channel();
     behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::Request {
         request,
@@ -211,72 +183,59 @@ async fn search_one<const N: usize, S: Store<N>>(
     };
 
     // Process the response
-    let (matches, distant_matches) = match response {
-        Some(ResponsePacket::Results(ResultsPacket { distant_matches, matches })) => (matches, distant_matches),
-        Some(_) => panic!("Unexpected response type"),
+    let (results, routes) = match response {
+        Some(ResponsePacket::Results(ResultsPacket { routes, results })) => (results, routes),
+        Some(_) => {
+            warn!("{our_peer_id} Received invalid response from {remote_peer_id}");
+            return None;
+        },
         None => {
             warn!("{our_peer_id} Received no response from {remote_peer_id}");
             return None;
         }
     };
 
-    let query_results = matches.into_iter().filter_map(|local_match|
-        match S::SearchResult::from_bytes(&local_match.result) {
-            Ok(result) => Some(QueryResult {
-                result,
-                query: local_match.query as usize,
-            }),
-            Err(e) => {
-                warn!("{our_peer_id} Received invalid result from {remote_peer_id}: {e}");
-                None
-            },
-        }
-    ).collect::<Vec<_>>();
-
-    let route_to_results = distant_matches.into_iter().map(|distant_match|
+    let results = results.into_iter().filter_map(|r| S::Result::from_bytes(&r).ok()).collect::<Vec<_>>();
+    let routes = routes.into_iter().map(|distant_match|
         ProviderInfo {
             peer_id: distant_match.peer_id.into(),
-            queries: distant_match.queries.into_iter().map(|m| m.map(|m| m as usize)).collect(),
+            match_scores: distant_match.match_scores,
             addresses: distant_match.addresses.into_iter().filter_map(|a| a.parse().ok()).collect(),
         }
     ).collect::<Vec<_>>();
 
-    debug!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", query_results.len(), route_to_results.len());
+    debug!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", results.len(), routes.len());
 
-    Some((remote_peer_id, query_results, route_to_results))
+    Some((remote_peer_id, results, routes))
 }
  
 pub(crate) async fn search<const N: usize, S: Store<N>>(
-    search_follower: OngoingSearchFollower<S::SearchResult>,
+    search_follower: OngoingSearchFollower<N, S>,
     behaviour_controller: BehaviourController,
     db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
 ) -> TaskOutput {
     info!("{our_peer_id} Starting search task");
-    let queries = search_follower.queries().await;
+    let query = search_follower.query().await;
 
     // Query ourselves
-    let db2 = db.clone();
-    let queries2 = queries.clone();
+    let db2 = Arc::clone(&db);
+    let query2 = Arc::clone(&query);
     let search_follower2 = search_follower.clone();
     spawn(async move {
-        let mut cids = HashSet::new();
-        for (query, fut) in queries2.inner.clone().into_iter().map(|(words, min_matching)| db2.store().search(words, min_matching)).enumerate() {
-            let mut stream = fut.await;
-            while let Some(result) = stream.next().await {
-                if cids.insert(result.cid()) {
-                    let _ = search_follower2.send((result, query, our_peer_id)).await;
-                }
-            }
+        let fut = db2.store().search(query2);
+        let mut stream = fut.await;
+        while let Some(result) = stream.next().await {
+            let _ = search_follower2.send((result, our_peer_id)).await;
         }
     });
-    let remote_results = db.search_routes(&queries).await;
+    let routes = db.search_routes(&query).await;
     let mut config;
     let mut providers = ProviderBinaryHeap::Speed(BinaryHeap::new());
     let mut already_queried = HashSet::new();
     let mut final_peers = 0;
     let mut documents_found = 0;
-    for (peer_id, queries) in remote_results {
+    for (peer_id, queries) in routes {
         providers.push((peer_id, queries, Vec::new()));
     }
 
@@ -287,13 +246,13 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
         config = search_follower.config().await;
         providers.update_priority(config.priority, documents_found);
 
-        // TODO: update queries
+        // TODO: update query if needed
 
         // Start new requests until limit is reached
         while ongoing_requests.len() < config.req_limit {
             let Some(provider) = providers.pop() else {break};
             already_queried.insert(provider.peer_id);
-            let search = search_one::<N,S>(queries.clone(), behaviour_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
+            let search = search_one::<N,S>(Arc::clone(&query), behaviour_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
             ongoing_requests.push(Box::pin(timeout(Duration::from_millis(config.timeout_ms as u64), search)));
         }
 
@@ -305,7 +264,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
         // Wait for one of the ongoing requests to finish
         let (r, _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
-        let (peer_id, query_results, routes) = match r {
+        let (peer_id, results, routes) = match r {
             Ok(Some(r)) => r,
             Ok(None) => continue,
             Err(_) => {
@@ -313,12 +272,12 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
                 continue
             },
         };
-        if !query_results.is_empty() {
+        if !results.is_empty() {
             final_peers += 1;
         }
-        documents_found += query_results.len(); // TODO: make sure it's not too easy for a malicious peer to make this increase too much
-        for query_result in query_results {
-            let r = search_follower.send((query_result.result, query_result.query, peer_id)).await;
+        documents_found += results.len(); // TODO: make sure it's not too easy for a malicious peer to make this increase too much
+        for result in results {
+            let r = search_follower.send((result, peer_id)).await;
             if r.is_err() {
                 warn!("{our_peer_id} Search interrupted due to results being dropped");
                 return TaskOutput::None;

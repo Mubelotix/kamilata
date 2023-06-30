@@ -146,20 +146,20 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search(&mut self, queries: impl Into<SearchQueries>) -> OngoingSearchController<S::SearchResult> {
-        self.search_with_config(queries, SearchConfig::default()).await
+    pub async fn search(&mut self, query: impl Into<S::Query>) -> OngoingSearchController<N, S> {
+        self.search_with_config(query, SearchConfig::default()).await
     }
 
     /// Starts a new search with custom [SearchPriority] and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search_with_priority(&mut self, queries: impl Into<SearchQueries>, priority: SearchPriority) -> OngoingSearchController<S::SearchResult> {
-        self.search_with_config(queries, SearchConfig::default().with_priority(priority)).await
+    pub async fn search_with_priority(&mut self, query: impl Into<S::Query>, priority: SearchPriority) -> OngoingSearchController<N, S> {
+        self.search_with_config(query, SearchConfig::default().with_priority(priority)).await
     }
 
     /// Starts a new search with custom [SearchConfig] and returns an [handler](OngoingSearchControler) to control it.
-    pub async fn search_with_config(&mut self, queries: impl Into<SearchQueries>, config: SearchConfig) -> OngoingSearchController<S::SearchResult> {
-        let queries = queries.into();
-        let search_state = OngoingSearchState::new(queries, config);
-        let (search_controler, search_follower) = search_state.into_pair::<S::SearchResult>();
+    pub async fn search_with_config(&mut self, query: impl Into<S::Query>, config: SearchConfig) -> OngoingSearchController<N, S> {
+        let query = query.into();
+        let search_state = OngoingSearchState::new(query, config);
+        let (search_controler, search_follower) = search_state.into_pair();
         self.tasks.insert(self.task_counter.next() as usize, Box::pin(search(search_follower, self.new_controller(), Arc::clone(&self.db), self.our_peer_id)));
         search_controler
     }

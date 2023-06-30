@@ -104,10 +104,8 @@ pub struct Query {
 
 #[derive(Protocol, Debug, Clone)]
 pub struct SearchPacket {
-    /// A list of queries.
-    /// When multiple queries are sent, all of them should be replied to.
-    /// If not possible, the responder should reply with as many as possible, starting with the first.
-    pub queries: Vec<Query>,
+    /// A query that will be decoded with [SearchQuery::from_bytes].
+    pub query: Vec<u8>,
 }
 
 #[derive(Protocol, Debug, Clone)]
@@ -128,27 +126,19 @@ pub struct UpdateFiltersPacket {
 
 #[derive(Protocol, Debug, Clone)]
 pub struct DistantMatch {
-    /// The first (thus best) query this result matched at a distance of the corresponding index.
-    /// At least one of the items in this list should be `Some`.
-    pub queries: Vec<Option<u16>>,
+    /// An array of match scores for each filter of the peer.
+    /// At least one of the items in this list should be non-zero.
+    pub match_scores: Vec<u32>,
     pub peer_id: PeerId,
     pub addresses: Vec<String>,
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct LocalMatch {
-    /// The first (thus best) query this result matched.
-    pub query: u16,
-    /// The result to be deserialized and used.
-    pub result: Vec<u8>,
-}
-
-#[derive(Protocol, Debug, Clone)]
 pub struct ResultsPacket {
     /// A list of routing information to be used to find actual results.
-    pub distant_matches: Vec<DistantMatch>,
+    pub routes: Vec<DistantMatch>,
     /// Contains a list of [SearchResult]s to be deserialized and used.
-    pub matches: Vec<LocalMatch>,
+    pub results: Vec<Vec<u8>>,
 }
 
 #[derive(Protocol, Debug, Clone)]

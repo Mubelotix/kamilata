@@ -30,6 +30,45 @@ impl Movie {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MovieQuery {
+    words: Vec<String>,
+}
+
+impl<const N: usize> SearchQuery<N> for MovieQuery {
+    type ParsingError = serde_json::Error;
+
+    fn match_score(&self, filter: &Filter<N>) -> u32 {
+        let mut matches = 0;
+        for word in &self.words {
+            if filter.get_word::<MovieIndex<N>>(word) {
+                matches += 1;
+            }
+        }
+        matches
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(&self).unwrap()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::ParsingError> {
+        serde_json::from_slice(bytes)
+    }
+}
+
+impl From<Vec<String>> for MovieQuery {
+    fn from(words: Vec<String>) -> Self {
+        MovieQuery { words }
+    }
+}
+
+impl From<&[&str]> for MovieQuery {
+    fn from(words: &[&str]) -> Self {
+        MovieQuery { words: words.iter().map(|w| w.to_string()).collect() }
+    }
+}
+
 #[derive(Default)]
 pub struct MovieIndexInner<const N: usize> {
     movies: Vec<Movie>,
@@ -43,7 +82,8 @@ pub struct MovieIndex<const N: usize> {
 
 #[async_trait]
 impl<const N: usize> Store<N> for MovieIndex<N> {
-    type SearchResult = Movie;
+    type Result = Movie;
+    type Query = MovieQuery;
 
     fn hash_word(word: &str) -> Vec<usize> {
         let mut result = 1usize;
@@ -61,23 +101,22 @@ impl<const N: usize> Store<N> for MovieIndex<N> {
         self.inner.read().await.filter.clone()
     }
 
-    fn search(&self, words: Vec<String>, min_matching: usize) -> ResultStreamBuilderFut<Movie> {
+    fn search(&self, query: Arc<Self::Query>) -> ResultStreamBuilderFut<Movie> {
         let inner2 = Arc::clone(&self.inner);
         Box::pin(async move {
             // We are in the future in charge of creating a stream
 
             let inner = inner2.read().await;
-            let present_words = words.iter().filter(|w| inner.filter.get_word::<Self>(w)).count();
-            let matching_movies = match present_words < min_matching {
-                true => Vec::new(),
-                false => inner.movies.iter().filter(move |movie| {
+            let matching_movies = match query.match_score(&inner.filter) {
+                0 => Vec::new(),
+                _ => inner.movies.iter().filter(move |movie| {
                     let mut matches = 0;
-                    for word in &words {
-                        if movie.words().contains(word) {
+                    for query_word in &query.words {
+                        if movie.words().contains(query_word) {
                             matches += 1;
                         }
                     }
-                    matches >= min_matching
+                    matches >= 1 // 1 is an arbitrary value
                 }).cloned().collect::<Vec<_>>(),
             };
 

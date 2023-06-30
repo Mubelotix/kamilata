@@ -147,24 +147,15 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
     }
 
     /// Returns peers and their distance to each query.
-    /// The distance from node `n` for query `i` can be found at index `i` in the array associated with `n`.
-    pub async fn search_routes(&self, queries: &SearchQueries) -> Vec<(PeerId, Vec<Option<usize>>)> {
+    /// Each peer is tested for all its filters, and the matching priorities are returned in an array.
+    pub async fn search_routes(&self, query: &S::Query) -> Vec<(PeerId, Vec<u32>)> {
         let filters = self.seeder_filters.read().await;
         filters
             .iter()
             .map(|(peer_id, filters)| {
-                (*peer_id, queries.inner.iter().map(|(words, min_matching)| {
-                    let mut best_distance = None;
-                    for (distance, filter) in filters.iter().enumerate() {
-                        if words.iter().filter(|w| filter.get_word::<S>(w)).count() >= *min_matching {
-                            best_distance = Some(distance);
-                            break;
-                        }
-                    }
-                    best_distance
-                }).collect::<Vec<_>>())
+                (*peer_id, filters.iter().map(|f| query.match_score(f)).collect::<Vec<_>>())
             })
-            .filter(|(_,m)| m.iter().any(|d| d.is_some()))
+            .filter(|(_,m)| m.iter().any(|d| *d > 0))
             .collect()
     }
 

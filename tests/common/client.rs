@@ -38,7 +38,7 @@ pub enum ClientCommand {
         addr: Multiaddr,
     },
     Search {
-        queries: SearchQueries,
+        query: MovieQuery,
         sender: OneshotSender<SearchResults<Movie>>,
         config: SearchConfig,
     },
@@ -69,18 +69,18 @@ impl ClientController {
         self.sender.send(ClientCommand::LeechFromAll).await.unwrap();
     }
 
-    pub async fn search(&self, queries: impl Into<SearchQueries>) -> SearchResults<Movie> {
-        self.search_with_config(queries, SearchConfig::default()).await
+    pub async fn search(&self, query: impl Into<MovieQuery>) -> SearchResults<Movie> {
+        self.search_with_config(query, SearchConfig::default()).await
     }
 
-    pub async fn search_with_priority(&self, queries: impl Into<SearchQueries>, priority: SearchPriority) -> SearchResults<Movie> {
-        self.search_with_config(queries, SearchConfig::default().with_priority(priority)).await
+    pub async fn search_with_priority(&self, query: impl Into<MovieQuery>, priority: SearchPriority) -> SearchResults<Movie> {
+        self.search_with_config(query, SearchConfig::default().with_priority(priority)).await
     }
 
-    pub async fn search_with_config(&self, queries: impl Into<SearchQueries>, config: SearchConfig) -> SearchResults<Movie> {
+    pub async fn search_with_config(&self, query: impl Into<MovieQuery>, config: SearchConfig) -> SearchResults<Movie> {
         let (sender, receiver) = oneshot_channel();
         self.sender.send(ClientCommand::Search {
-            queries: queries.into(),
+            query: query.into(),
             sender,
             config,
         }).await.unwrap();
@@ -187,7 +187,7 @@ impl Client {
                                 self.swarm.behaviour_mut().leech_from(peer_id);
                             }
                         },
-                        ClientCommand::Search { queries, sender, config } => {
+                        ClientCommand::Search { query: queries, sender, config } => {
                             let mut controler = self.swarm.behaviour_mut().search_with_config(queries, config).await;
                     
                             tokio::spawn(async move {
