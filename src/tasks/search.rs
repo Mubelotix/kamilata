@@ -127,7 +127,7 @@ impl std::cmp::Ord for ProviderInfo<SPEED> {
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
             (Some((dist1, score1)), Some((dist2, score2))) => match dist1.cmp(&dist2) {
-                Ordering::Equal => score1.cmp(&score2).reverse(),
+                Ordering::Equal => score2.cmp(&score1).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
             },
@@ -145,7 +145,7 @@ impl std::cmp::Ord for ProviderInfo<RELEVANCE> {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some((dist1, score1)), Some((dist2, score2))) => match score1.cmp(&score2) {
+            (Some((dist1, score1)), Some((dist2, score2))) => match score2.cmp(&score1) {
                 Ordering::Equal => dist1.cmp(&dist2).reverse(),
                 Ordering::Less => Ordering::Greater,
                 Ordering::Greater => Ordering::Less,
