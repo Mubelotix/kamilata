@@ -10,8 +10,8 @@ pub trait SearchResult: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<Self, Self::ParsingError>;
 }
 
-type ResultStream<SearchResult> = Pin<Box<dyn Stream<Item = SearchResult> + Send>>;
-type ResultStreamFut<SearchResult> = Pin<Box<dyn Future<Output = ResultStream<SearchResult>> + Send>>;
+pub type ResultStream<SearchResult> = Pin<Box<dyn Stream<Item = SearchResult> + Send>>;
+pub type ResultStreamBuilderFut<SearchResult> = Pin<Box<dyn Future<Output = ResultStream<SearchResult>> + Send>>;
 
 /// This library lets you manage your documents the way you want.
 /// This trait must be implemented on your document store.
@@ -33,5 +33,5 @@ pub trait Store<const N: usize>: Send + Sync + 'static {
     /// Search among all documents and return those matching at least `min_matching` words.
     /// 
     /// The return type is a future to a stream of results.
-    fn search(&self, words: Vec<String>, min_matching: usize) -> ResultStreamFut<Self::SearchResult>;
+    fn search(&self, words: Vec<String>, min_matching: usize) -> ResultStreamBuilderFut<Self::SearchResult>;
 }

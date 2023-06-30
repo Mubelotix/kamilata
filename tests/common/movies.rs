@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
 use super::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -65,24 +61,39 @@ impl<const N: usize> Store<N> for MovieIndex<N> {
         self.inner.read().await.filter.clone()
     }
 
-    fn search(&self, words: Vec<String>, min_matching: usize) -> std::pin::Pin<Box<dyn futures::Future<Output = Vec<Self::SearchResult> > +Send+Sync+'static> >  {
+    fn search(&self, words: Vec<String>, min_matching: usize) -> ResultStreamBuilderFut<Movie> {
         let inner2 = Arc::clone(&self.inner);
         Box::pin(async move {
+            // We are in the future in charge of creating a stream
+
             let inner = inner2.read().await;
             let present_words = words.iter().filter(|w| inner.filter.get_word::<Self>(w)).count();
-            if present_words < min_matching {
-                return Vec::new();
+            let matching_movies = match present_words < min_matching {
+                true => Vec::new(),
+                false => inner.movies.iter().filter(move |movie| {
+                    let mut matches = 0;
+                    for word in &words {
+                        if movie.words().contains(word) {
+                            matches += 1;
+                        }
+                    }
+                    matches >= min_matching
+                }).cloned().collect::<Vec<_>>(),
+            };
+
+            let mut futures = Vec::new();
+            for movie in matching_movies {
+                futures.push(async move {
+                    // We are in a future that will be polled when next() is called on the stream
+                    // Here, we can do some heavy work for the current result
+                    movie.clone()
+                });
             }
 
-            inner.movies.iter().filter(|movie| {
-                let mut matches = 0;
-                for word in &words {
-                    if movie.words().contains(word) {
-                        matches += 1;
-                    }
-                }
-                matches >= min_matching
-            }).cloned().collect()
+            let mut stream = FuturesUnordered::new();
+            stream.extend(futures);
+            let stream: ResultStream<Movie> = Box::pin(stream);
+            stream
         })
     }
 }
