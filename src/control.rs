@@ -261,6 +261,15 @@ impl<T: SearchResult> OngoingSearchFollower<T> {
     }
 }
 
+impl<T: SearchResult> Clone for OngoingSearchFollower<T> {
+    fn clone(&self) -> Self {
+        OngoingSearchFollower {
+            sender: self.sender.clone(),
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
 /// A struct containing search results and some useful information about how the search went.
 #[derive(Debug)]
 pub struct SearchResults<T: SearchResult> {

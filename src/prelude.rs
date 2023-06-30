@@ -13,7 +13,7 @@ pub(crate) use crate::{
 };
 pub(crate) use either::Either;
 pub(crate) use futures::{
-    future::{join_all, BoxFuture},
+    future::BoxFuture,
     prelude::*,
     FutureExt,
 };

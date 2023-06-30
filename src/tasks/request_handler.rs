@@ -33,7 +33,16 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 .collect::<Vec<_>>());
             
             let remote_matches = db.search_routes(&queries).await;
-            let local_matches = join_all(queries.inner.into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
+            let mut local_matches = Vec::new();
+            let mut cids = HashSet::new();
+            for (query_id, fut) in queries.inner.into_iter().map(|(words, min_matching)| db.store().search(words, min_matching)).enumerate() {
+                let mut stream = fut.await;
+                while let Some(result) = stream.next().await {
+                    if cids.insert(result.cid()) {
+                        local_matches.push((query_id, result));
+                    }
+                }
+            }
 
             let mut distant_matches = Vec::new();
             for (peer_id, distances) in remote_matches {
@@ -48,15 +57,12 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
             }
 
             let mut matches = Vec::new();
-            let mut cids = HashSet::new();
-            for (query_id, results) in local_matches.into_iter().enumerate() {
-                for result in results {
-                    if cids.insert(result.cid()) {
-                        matches.push(LocalMatch {
-                            query: query_id as u16,
-                            result: result.into_bytes(),
-                        })
-                    }
+            for (query_id, result) in local_matches.into_iter() {
+                if cids.insert(result.cid()) {
+                    matches.push(LocalMatch {
+                        query: query_id as u16,
+                        result: result.into_bytes(),
+                    })
                 }
             }
             stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {

@@ -1,10 +1,9 @@
 //! This module contains the algorithm that is used for discovering results on the network.
 
-use futures::future::join_all;
-
 use super::*;
 use std::collections::{BinaryHeap, HashSet};
 use std::cmp::Ordering;
+use std::thread::spawn;
 
 // Constants for each [FixedSearchPriority]. They are used as const generics.
 const ANY: usize = 0;
@@ -255,18 +254,23 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
     our_peer_id: PeerId,
 ) -> TaskOutput {
     info!("{our_peer_id} Starting search task");
+    let queries = search_follower.queries().await;
 
     // Query ourselves
-    let queries = search_follower.queries().await;
-    let local_results = join_all(queries.inner.clone().into_iter().map(|(words, min_matching)| db.store().search(words, min_matching))).await;
-    let mut cids = HashSet::new();
-    for (query, results) in local_results.into_iter().enumerate() {
-        for result in results {
-            if cids.insert(result.cid()) {
-                let _ = search_follower.send((result, query, our_peer_id)).await;
+    let db2 = db.clone();
+    let queries2 = queries.clone();
+    let search_follower2 = search_follower.clone();
+    spawn(move || async move {
+        let mut cids = HashSet::new();
+        for (query, fut) in queries2.inner.clone().into_iter().map(|(words, min_matching)| db2.store().search(words, min_matching)).enumerate() {
+            let mut stream = fut.await;
+            while let Some(result) = stream.next().await {
+                if cids.insert(result.cid()) {
+                    let _ = search_follower2.send((result, query, our_peer_id)).await;
+                }
             }
         }
-    }
+    });
     let remote_results = db.search_routes(&queries).await;
     let mut config;
     let mut providers = ProviderBinaryHeap::Speed(BinaryHeap::new());
