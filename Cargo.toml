@@ -1,9 +1,10 @@
 [package]
 name = "kamilata"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Mubelotix <mubelotix@gmail.com>"]
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/Mubelotix/Kamilata"
 description = "A Peer-to-Peer Search Engine System (based on libp2p)"
 readme = "README.md"
 categories = ["network-programming"]
