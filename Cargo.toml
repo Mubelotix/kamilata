@@ -1,7 +1,13 @@
 [package]
 name = "kamilata"
 version = "0.1.0"
+authors = ["Mubelotix <mubelotix@gmail.com>"]
 edition = "2021"
+license = "MIT"
+description = "A Peer-to-Peer Search Engine System (based on libp2p)"
+readme = "README.md"
+categories = ["network-programming"]
+keywords = ["p2p", "search-engine", "distributed-systems", "libp2p"]
 
 [dependencies]
 libp2p = {version="0.51", features=["tokio", "noise", "mplex", "kad"]}
