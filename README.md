@@ -16,22 +16,27 @@
 
 ## Scope
 
-This project is an implementation of the Kamilata protocol. It takes the form of a library that you can easily plug into your own platform. This library provides a simple yet very powerful API to index any document you might have.
+This project is an implementation as a library of the Kamilata protocol.
+Kamilata enables trustless search in open networks.
+This library can handle any type of data, and be easily integrated into your libp2p application.
 
-This library is intented for various use cases, such as:
+Several use cases are possible:
 
 - Youtube-like video sharing platforms
 - Social networks
 - File sharing platforms
 - Web search engines
 
-Kamilata is relevant and able to provide a good search experience if *one* of the following conditions is met:
+The ranking algorithm is up to you, as this library will only provide you a stream of unordered search results.
+Based on metadata you include in those results, you can rank them however you want.
 
-- Queries are specific (a few words)
-- The corpus is small (less than a million documents)
-- There are significant popularity differences between documents
+Kamilata is the first system in the world to offer the properties described above, while still being scalable.
+Indeed, the network can include without problems more than hundreds of millions documents and hundreds of thousands of nodes.
+The actual limit is unknown.
 
-Kamilata powers the [Admarus IPFS search engine](https://github.com/mubelotix/admarus-daemon).
+<!-- Kamilata starts being irrelevant for a query when the first 10 most relevant results for that query are not provided by more than 0.1% of the peers who have matching documents for that query. This is completely impossible in networks of less than 1000 peers. In other cases, it's still very uncommon, especially if the most relevant results are also the most popular ones.  TODO clarify -->
+
+This library powers the [Admarus IPFS search engine](https://github.com/mubelotix/admarus).
 
 ## General Technical Description
 
