@@ -49,9 +49,7 @@ To solve this, I added a routing algorithm that allows the searcher to route que
 Thanks to this, queries skip all the useless peers.
 Now, you can download a list of matching documents at constant speed regardless of the query.
 The search speed depends on the size of the network.
-New results are received every `h` hops, where `h = ln(n)/ln(c)` with `n` the number of peers and `c` the number of connections each peer has to others. Examples:
-- with `n = 1000 nodes` and `c = 30 connections`, `h = 2 hops`
-- with `n = 1M nodes` and `c = 100 connections`, `h = 3 hops`
+New results are received every `h` hops, where `h = ln(n)/ln(c)` with `n` the number of peers and `c` the number of connections each peer has to others. This is very good as for `h` beeing more than 3 when `c` is 100, the network needs to have more than a million peers.
 Results can then be ranked freely based on the metadata they include.
 
 The Kamilata routing algorithm is based on [Attenuated Bloom Filters](https://en.wikipedia.org/wiki/Bloom_filter#Attenuated_Bloom_filters). Bloom filters are compact data structures used to determine if an element is present in a set. Here, we check the presence of words in documents. From a node's point of view, a Kamilata network is divided into virtual node groups of varying sizes. This divides the corpus into multiple sets ranging from a few documents to all documents of the corpus. Each having its corresponding Bloom filter, it is then easy to locate words in the network and know which nodes to query for given words.
