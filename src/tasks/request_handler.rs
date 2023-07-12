@@ -38,8 +38,13 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
             let mut results = Vec::new();
             let fut = db.store().search(Arc::clone(&query));
             let mut result_stream = fut.await;
+            let start = std::time::Instant::now(); // FIXME: this is provisory
             while let Some(result) = result_stream.next().await {
                 results.push(result.into_bytes());
+                if start.elapsed().as_secs() > 10 {
+                    warn!("{our_peer_id} Search took too long, aborting");
+                    break;
+                }
             }
 
             let mut routes = Vec::new();
