@@ -3,6 +3,7 @@ mod request_handler;
 mod filter_leecher;
 mod search;
 mod request_maker;
+mod search_request;
 
 pub(self) use crate::prelude::*;
 pub(crate) use filter_seeder::*;
@@ -10,6 +11,7 @@ pub(crate) use request_handler::*;
 pub(crate) use filter_leecher::*;
 pub(crate) use search::*;
 pub(crate) use request_maker::*;
+pub(crate) use search_request::*;
 
 pub struct HandlerTask {
     pub fut: BoxFuture<'static, HandlerTaskOutput>,

@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use async_trait::async_trait;
 
-pub trait SearchResult: Sized {
+pub trait SearchResult: Sized + std::fmt::Debug {
     type Cid: std::hash::Hash + Eq + Send + Sync + std::fmt::Debug;
-    type ParsingError: std::error::Error;
+    type ParsingError: std::error::Error + Send;
 
     fn cid(&self) -> Self::Cid;
     fn into_bytes(self) -> Vec<u8>;

@@ -35,36 +35,41 @@ pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
                 },
             };
 
-            let mut results = Vec::new();
-            let fut = db.store().search(Arc::clone(&query));
-            let mut result_stream = fut.await;
-            let start = std::time::Instant::now(); // FIXME: this is provisory
-            while let Some(result) = result_stream.next().await {
-                results.push(result.into_bytes());
-                if start.elapsed().as_secs() > 10 {
-                    warn!("{our_peer_id} Search took too long, aborting");
-                    break;
-                }
-            }
-
+            // Send routes
             let mut routes = Vec::new();
             for (peer_id, match_scores) in db.search_routes(&query).await {
                 let addresses: Vec<String> = db.get_addresses(&peer_id).await.into_iter().map(|a| a.to_string()).collect();
                 if !addresses.is_empty() {
-                    routes.push(DistantMatch {
+                    routes.push(Route {
                         match_scores,
                         peer_id: peer_id.into(),
                         addresses,
                     });
                 }
             }
+            let Ok(()) = stream.start_send_unpin(ResponsePacket::Routes(RoutesPacket(routes))) else {return HandlerTaskOutput::None};
+            let Ok(()) = stream.flush().await else {return HandlerTaskOutput::None};
+            trace!("{our_peer_id} Sent routes to {remote_peer_id}.");
 
-            stream.start_send_unpin(ResponsePacket::Results(ResultsPacket {
-                routes,
-                results
-            })).unwrap();
-            stream.flush().await.unwrap();
-            trace!("{our_peer_id} Sent the data to {remote_peer_id}.");
+            // Get results
+            let (sender, mut receiver) = channel::<S::Result>(100);
+            spawn(async move {
+                let fut = db.store().search(Arc::clone(&query));
+                let mut result_stream = fut.await;
+                while let Some(result) = result_stream.next().await {
+                    let Ok(()) = sender.send(result).await else {break};
+                }
+            });
+
+            // Send results
+            while let Some(result) = receiver.recv().await {
+                let Ok(()) = stream.start_send_unpin(ResponsePacket::Result(ResultPacket(result.into_bytes()))) else {break};
+                let Ok(()) = stream.flush().await else {break};
+            }
+
+            // Send search over
+            let Ok(()) = stream.start_send_unpin(ResponsePacket::SearchOver) else {return HandlerTaskOutput::None};
+            let Ok(()) = stream.flush().await else {return HandlerTaskOutput::None};
 
             HandlerTaskOutput::None
         },

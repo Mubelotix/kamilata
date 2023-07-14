@@ -113,7 +113,12 @@ pub enum ResponsePacket {
     /// Sent periodically to inform the peers of our filters.
     UpdateFilters(UpdateFiltersPacket),
     /// Response to a [RequestPacket::Search] packet.
-    Results(ResultsPacket),
+    /// Will be followed by multiple [ResponsePacket::Result].
+    Routes(RoutesPacket),
+    /// Response to a [RequestPacket::Search] packet.
+    Result(ResultPacket),
+    /// Sent once all [ResponsePacket::Result] have been sent.
+    SearchOver,
 
     Disconnect(DisconnectPacket),
 }
@@ -125,7 +130,7 @@ pub struct UpdateFiltersPacket {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct DistantMatch {
+pub struct Route {
     /// An array of match scores for each filter of the peer.
     /// At least one of the items in this list should be non-zero.
     pub match_scores: Vec<u32>,
@@ -134,12 +139,16 @@ pub struct DistantMatch {
 }
 
 #[derive(Protocol, Debug, Clone)]
-pub struct ResultsPacket {
+pub struct RoutesPacket(
     /// A list of routing information to be used to find actual results.
-    pub routes: Vec<DistantMatch>,
-    /// Contains a list of [SearchResult]s to be deserialized and used.
-    pub results: Vec<Vec<u8>>,
-}
+    pub Vec<Route>
+);
+
+#[derive(Protocol, Debug, Clone)]
+pub struct ResultPacket(
+    /// Contains a result to be deserialized and used.
+    pub Vec<u8>,
+);
 
 #[derive(Protocol, Debug, Clone)]
 pub struct DisconnectPacket {

@@ -5,7 +5,7 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
     // In order to prevent deadlocks, please lock the different fields in the same order as they are declared in the struct.
 
     config: Arc<KamilataConfig>,
-    behaviour_controller: BehaviourController,
+    behaviour_controller: BehaviourController<N, S>,
     /// Documents to add in the global network corpus
     store: S,
     /// Filters received from seeders
@@ -17,7 +17,7 @@ pub(crate) struct Db<const N: usize, S: Store<N>> {
 }
 
 impl<const N: usize, S: Store<N>> Db<N, S> {
-    pub fn new(config: Arc<KamilataConfig>, store: S, behaviour_controller: BehaviourController) -> Self {
+    pub fn new(config: Arc<KamilataConfig>, store: S, behaviour_controller: BehaviourController<N, S>) -> Self {
         Db {
             config,
             behaviour_controller,
@@ -32,7 +32,7 @@ impl<const N: usize, S: Store<N>> Db<N, S> {
         Arc::clone(&self.config)
     }
 
-    pub(crate) fn behaviour_controller(&self) -> &BehaviourController {
+    pub(crate) fn behaviour_controller(&self) -> &BehaviourController<N, S> {
         &self.behaviour_controller
     }
 

@@ -37,13 +37,13 @@ pub struct KamilataBehaviour<const N: usize, S: Store<N>> {
     rt_handle: tokio::runtime::Handle,
 
     /// Used to create new [BehaviourController]s
-    control_msg_sender: Sender<BehaviourControlMessage>,
+    control_msg_sender: Sender<BehaviourControlMessage<N, S>>,
     /// Receiver of messages from [BehaviourController]s
-    control_msg_receiver: Receiver<BehaviourControlMessage>,
+    control_msg_receiver: Receiver<BehaviourControlMessage<N, S>>,
     /// When a message is to be sent to a handler that is being dialed, it is temporarily stored here.
-    pending_handler_events: BTreeMap<PeerId, HandlerInEvent>,
+    pending_handler_events: BTreeMap<PeerId, HandlerInEvent<N, S>>,
     /// When a message is ready to be dispatched to a handler, it is moved here.
-    handler_event_queue: Vec<(PeerId, HandlerInEvent)>,
+    handler_event_queue: Vec<(PeerId, HandlerInEvent<N, S>)>,
 
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
@@ -121,7 +121,7 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
         self.db.seeder_count().await
     }
 
-    fn new_controller(&self) -> BehaviourController {
+    fn new_controller(&self) -> BehaviourController<N, S> {
         BehaviourController {
             sender: self.control_msg_sender.clone(),
         }
@@ -323,25 +323,34 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
 
 /// Internal control messages send by [BehaviourController] to [KamilataBehaviour]
 #[derive(Debug)]
-pub(crate) enum BehaviourControlMessage {
-    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent),
+pub(crate) enum BehaviourControlMessage<const N: usize, S: Store<N>> {
+    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent<N, S>),
     OutputEvent(KamilataEvent),
 }
 
 /// A struct that allows to send messages to an [handler](ConnectionHandler)
-#[derive(Clone)]
-pub(crate) struct BehaviourController {
-    sender: Sender<BehaviourControlMessage>,
+pub(crate) struct BehaviourController<const N: usize, S: Store<N>> {
+    sender: Sender<BehaviourControlMessage<N, S>>,
 }
 
-impl BehaviourController {
+impl<const N: usize, S: Store<N>> Clone for BehaviourController<N, S> {
+    fn clone(&self) -> Self {
+        Self { sender: self.sender.clone() }
+    }
+}
+
+impl<const N: usize, S: Store<N>> BehaviourController<N, S> {
     /// Requests behaviour to dial a peer and send a message to it.
-    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent) {
-        self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await.unwrap();
+    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent<N, S>) {
+        if let Err(e) = self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await {
+            error!("Failed to dial peer and message {e}");
+        }
     }
 
     /// Outputs an event from the behaviour.
     pub async fn emit_event(&self, event: KamilataEvent) {
-        self.sender.send(BehaviourControlMessage::OutputEvent(event)).await.unwrap();
+        if let Err(e) = self.sender.send(BehaviourControlMessage::OutputEvent(event)).await {
+            error!("Failed to emit event {e}");
+        }
     }
 }

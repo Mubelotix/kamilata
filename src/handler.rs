@@ -1,13 +1,20 @@
 use crate::prelude::*;
 
 /// Events aimed at a [KamilataHandler]
-pub enum HandlerInEvent {
+pub enum HandlerInEvent<const N: usize, S: Store<N>> {
     /// Asks the handler to send a request and receive a response.
     Request {
         /// This request packet will be sent through a new outbound substream.
         request: RequestPacket,
         /// The response will be sent back through this channel.
         sender: OneshotSender<Option<ResponsePacket>>,
+    },
+    /// Opens a channel
+    SearchRequest {
+        query: Arc<S::Query>,
+        routes_sender: Sender<Vec<Route>>,
+        result_sender: OngoingSearchFollower<N, S>,
+        over_notifier: OneshotSender<()>,
     },
     /// Asks the handler to leech filters
     LeechFilters,
@@ -17,10 +24,11 @@ pub enum HandlerInEvent {
     StopSeeding,
 }
 
-impl std::fmt::Debug for HandlerInEvent {
+impl<const N: usize, S: Store<N>> std::fmt::Debug for HandlerInEvent<N, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HandlerInEvent::Request { .. } => write!(f, "Request"),
+            HandlerInEvent::SearchRequest { .. } => write!(f, "SearchRequest"),
             HandlerInEvent::LeechFilters => write!(f, "LeechFilters"),
             HandlerInEvent::StopLeeching => write!(f, "StopLeeching"),
             HandlerInEvent::StopSeeding => write!(f, "StopSeeding"),
@@ -68,7 +76,7 @@ impl<const N: usize, S: Store<N>> KamilataHandler<N, S> {
 }
 
 impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
-    type InEvent = HandlerInEvent;
+    type InEvent = HandlerInEvent<N, S>;
     type OutEvent = HandlerOutEvent;
     type Error = ioError;
     type InboundProtocol = Either<ArcConfig, DeniedUpgrade>;
@@ -86,6 +94,10 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
         match event {
             HandlerInEvent::Request { request, sender } => {
                 let pending_task = pending_request::<N>(request, sender, self.our_peer_id, self.remote_peer_id);
+                self.pending_tasks.push((None, pending_task));
+            },
+            HandlerInEvent::SearchRequest { query, routes_sender, result_sender, over_notifier  } => {
+                let pending_task = pending_search_req::<N, S>(query, routes_sender, result_sender, over_notifier, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((None, pending_task));
             },
             HandlerInEvent::LeechFilters => {

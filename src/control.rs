@@ -153,7 +153,7 @@ pub struct OngoingSearchController<const N: usize, S: Store<N>> {
     inner: Arc<RwLock<OngoingSearchState<N, S>>>,
 }
 
-pub(crate) struct OngoingSearchFollower<const N: usize, S: Store<N>> {
+pub struct OngoingSearchFollower<const N: usize, S: Store<N>> {
     sender: Sender<(S::Result, PeerId)>,
     inner: Arc<RwLock<OngoingSearchState<N, S>>>,
 }
@@ -240,6 +240,11 @@ impl<const N: usize, S: Store<N>> OngoingSearchFollower<N, S> {
     /// Sends a search result to the controler.
     pub async fn send(&self, search_result: (S::Result, PeerId)) -> Result<(), tokio::sync::mpsc::error::SendError<(S::Result, PeerId)>> {
         self.sender.send(search_result).await
+    }
+
+    /// Detects if search is closed
+    pub fn is_closed(&self) -> bool {
+        self.sender.is_closed()
     }
 
     /// Returns a copy of the ongoing queries.

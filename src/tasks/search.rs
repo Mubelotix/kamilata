@@ -160,42 +160,20 @@ impl std::cmp::PartialOrd for ProviderInfo<RELEVANCE> {
 
 async fn search_one<const N: usize, S: Store<N>>(
     query: Arc<S::Query>,
-    behaviour_controller: BehaviourController,
+    behaviour_controller: BehaviourController<N, S>,
+    search_follower: OngoingSearchFollower<N, S>,
     addresses: Vec<Multiaddr>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId,
-) -> Option<(PeerId, Vec<S::Result>,  Vec<ProviderInfo<ANY>>)> {
+) -> Option<(PeerId, Vec<ProviderInfo<ANY>>)> {
     debug!("{our_peer_id} Querying {remote_peer_id} for results");
 
     // Dial the peer, orders the handle to request it, and wait for the response
-    let request = RequestPacket::Search(SearchPacket { query: query.to_bytes() }); // TODO: remove conversion
-    let (sender, receiver) = oneshot_channel();
-    behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::Request {
-        request,
-        sender,
-    }).await;
-    let response = match receiver.await {
-        Ok(response) => response,
-        Err(_) => {
-            warn!("{our_peer_id} Failed to receive response from {remote_peer_id}");
-            return None;
-        },
-    };
-
-    // Process the response
-    let (results, routes) = match response {
-        Some(ResponsePacket::Results(ResultsPacket { routes, results })) => (results, routes),
-        Some(_) => {
-            warn!("{our_peer_id} Received invalid response from {remote_peer_id}");
-            return None;
-        },
-        None => {
-            warn!("{our_peer_id} Received no response from {remote_peer_id}");
-            return None;
-        }
-    };
-
-    let results = results.into_iter().filter_map(|r| S::Result::from_bytes(&r).ok()).collect::<Vec<_>>();
+    let (over_notifier, over_receiver) = oneshot_channel();
+    let (routes_sender, mut routes_receiver) = channel(100);
+    behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::SearchRequest { query, routes_sender, result_sender: search_follower, over_notifier }).await;
+    
+    let Some(routes) = routes_receiver.recv().await else {return None};
     let routes = routes.into_iter().map(|distant_match|
         ProviderInfo {
             peer_id: distant_match.peer_id.into(),
@@ -204,14 +182,14 @@ async fn search_one<const N: usize, S: Store<N>>(
         }
     ).collect::<Vec<_>>();
 
-    debug!("{our_peer_id} Received {} results and {} routes from {remote_peer_id}", results.len(), routes.len());
+    let _ = over_receiver.await;
 
-    Some((remote_peer_id, results, routes))
+    Some((remote_peer_id, routes))
 }
  
 pub(crate) async fn search<const N: usize, S: Store<N>>(
     search_follower: OngoingSearchFollower<N, S>,
-    behaviour_controller: BehaviourController,
+    behaviour_controller: BehaviourController<N, S>,
     db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
 ) -> TaskOutput {
@@ -233,8 +211,6 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
     let mut config;
     let mut providers = ProviderBinaryHeap::Speed(BinaryHeap::new());
     let mut already_queried = HashSet::new();
-    let mut final_peers = 0;
-    let mut documents_found = 0;
     for (peer_id, queries) in routes {
         providers.push((peer_id, queries, Vec::new()));
     }
@@ -242,9 +218,9 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
     // Keep querying new peers for new results
     let mut ongoing_requests = Vec::new();
     loop {
-        search_follower.set_query_counts(already_queried.len(), final_peers, ongoing_requests.len()).await;
+        search_follower.set_query_counts(already_queried.len(), 0, ongoing_requests.len()).await; // TODO: value instead of 0
         config = search_follower.config().await;
-        providers.update_priority(config.priority, documents_found);
+        providers.update_priority(config.priority, 0); // TODO: value instead of 0
 
         // TODO: update query if needed
 
@@ -252,7 +228,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
         while ongoing_requests.len() < config.req_limit {
             let Some(provider) = providers.pop() else {break};
             already_queried.insert(provider.peer_id);
-            let search = search_one::<N,S>(Arc::clone(&query), behaviour_controller.clone(), provider.addresses, our_peer_id, provider.peer_id);
+            let search = search_one::<N,S>(Arc::clone(&query), behaviour_controller.clone(), search_follower.clone(), provider.addresses, our_peer_id, provider.peer_id);
             ongoing_requests.push(Box::pin(timeout(Duration::from_millis(config.timeout_ms as u64), search)));
         }
 
@@ -264,7 +240,7 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
         // Wait for one of the ongoing requests to finish
         let (r, _, remaining_requests) = futures::future::select_all(ongoing_requests).await;
         ongoing_requests = remaining_requests;
-        let (peer_id, results, routes) = match r {
+        let (_peer_id, routes) = match r {
             Ok(Some(r)) => r,
             Ok(None) => continue,
             Err(_) => {
@@ -272,16 +248,9 @@ pub(crate) async fn search<const N: usize, S: Store<N>>(
                 continue
             },
         };
-        if !results.is_empty() {
-            final_peers += 1;
-        }
-        documents_found += results.len(); // TODO: make sure it's not too easy for a malicious peer to make this increase too much
-        for result in results {
-            let r = search_follower.send((result, peer_id)).await;
-            if r.is_err() {
-                warn!("{our_peer_id} Search interrupted due to results being dropped");
-                return TaskOutput::None;
-            }
+        if search_follower.is_closed() {
+            warn!("{our_peer_id} Search interrupted due to results being dropped");
+            return TaskOutput::None;
         }
         for route in routes {
             if !already_queried.contains(&route.peer_id) && !route.addresses.is_empty() {

@@ -34,7 +34,7 @@ pub(crate) use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 pub(crate) use tokio::{
     sync::{
