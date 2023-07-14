@@ -30,7 +30,7 @@ pub enum KamilataEvent {
 /// This is the same approach as [Kademlia](libp2p::kad::Kademlia).
 pub struct KamilataBehaviour<const N: usize, S: Store<N>> {
     our_peer_id: PeerId,
-    connected_peers: Vec<PeerId>,
+    connections: HashMap<PeerId, isize>,
     db: Arc<Db<N, S>>,
     config: Arc<KamilataConfig>,
 
@@ -67,7 +67,7 @@ impl<const N: usize, S: Store<N> + Default> KamilataBehaviour<N, S> {
 
         KamilataBehaviour {
             our_peer_id,
-            connected_peers: Vec::new(),
+            connections: HashMap::new(),
             db: Arc::new(Db::new(Arc::clone(&config), S::default(), db_behaviour_controller)),
             config,
             control_msg_sender,
@@ -96,7 +96,7 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
 
         KamilataBehaviour {
             our_peer_id,
-            connected_peers: Vec::new(),
+            connections: HashMap::new(),
             db: Arc::new(Db::new(Arc::clone(&config), store, db_behaviour_controller)),
             config,
             control_msg_sender,
@@ -187,7 +187,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
             FromSwarm::ConnectionEstablished(info) => {
-                self.connected_peers.push(info.peer_id);
+                self.connections.entry(info.peer_id).and_modify(|count| *count += 1).or_insert(1);
                 if let Some(msg) = self.pending_handler_events.remove(&info.peer_id) {
                     self.handler_event_queue.push((info.peer_id, msg));
                 }
@@ -209,13 +209,16 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
                 warn!("{} Dial failure: {} with {:?}", self.our_peer_id, info.error, info.peer_id);
             },
             FromSwarm::ConnectionClosed(info) => {
-                self.connected_peers.retain(|peer_id| peer_id != &info.peer_id);
-                self.handler_event_queue.retain(|(peer_id, _)| peer_id != &info.peer_id);
-                self.pending_handler_events.remove(&info.peer_id);
-                let db2 = Arc::clone(&self.db);
-                tokio::spawn(async move {
-                    db2.remove_peer(&info.peer_id).await;
-                });
+                let peer_connections = *self.connections.entry(info.peer_id).and_modify(|count| *count -= 1).or_default();
+                self.connections.retain(|_, count| *count > 0);
+                if peer_connections <= 0 {
+                    self.handler_event_queue.retain(|(peer_id, _)| peer_id != &info.peer_id);
+                    self.pending_handler_events.remove(&info.peer_id);
+                    let db2 = Arc::clone(&self.db);
+                    tokio::spawn(async move {
+                        db2.remove_peer(&info.peer_id).await;
+                    });
+                }
             },
             _ => ()
         }
@@ -277,7 +280,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
                 BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, event) => {
                     // Just notify the handler directly if we are already connected to the peer.
                     trace!("{} Dialing peer {peer_id} with addresses {addresses:?} and sending message", self.our_peer_id);
-                    if self.connected_peers.contains(&peer_id) {
+                    if self.connections.get(&peer_id).unwrap_or(&0) > &0 {
                         return Poll::Ready(
                             ToSwarm::NotifyHandler {
                                 peer_id,
