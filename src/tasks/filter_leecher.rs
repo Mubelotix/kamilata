@@ -18,8 +18,14 @@ pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOu
         interval: config.get_filters_interval.clone(),
         blocked_peers: Vec::new(), // TODO
     };
-    stream.start_send_unpin(RequestPacket::GetFilters(req)).unwrap();
-    stream.flush().await.unwrap();
+    if let Err(e) = stream.start_send_unpin(RequestPacket::GetFilters(req)) {
+        warn!("{our_peer_id} Error while sending get filters request to {remote_peer_id}: {e}");
+        return HandlerTaskOutput::None;
+    }
+    if let Err(e) = stream.flush().await {
+        warn!("{our_peer_id} Error while flushing get filters request to {remote_peer_id}: {e}");
+        return HandlerTaskOutput::None;
+    }
 
     // Send an event
     db.behaviour_controller().emit_event(KamilataEvent::SeederAdded {

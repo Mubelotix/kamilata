@@ -26,7 +26,10 @@ impl protocol::Parcel for PeerId {
         let lenght: u16 = protocol::Parcel::read_field(read, settings, hints)?;
         let mut bytes = vec![0; lenght as usize];
         read.read_exact(&mut bytes)?;
-        Ok(PeerId(libp2p::PeerId::from_bytes(&bytes).unwrap()))
+        match libp2p::PeerId::from_bytes(&bytes) {
+            Ok(peer_id) => Ok(PeerId(peer_id)),
+            Err(_) => Err(protocol::Error::from_kind(protocol::ErrorKind::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid peer id")))),
+        }
     }
 
     fn write_field(&self, write: &mut dyn std::io::Write,
