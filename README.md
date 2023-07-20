@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Mubelotix/kamilata/master/.github/logo.png" alt="Kamilata" width="200" height="200" />
-</p>
-
 <h1 align="center">Kamilata</h1>
 
 <p align="center">
