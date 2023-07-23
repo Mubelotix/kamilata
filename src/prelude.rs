@@ -21,7 +21,7 @@ pub(crate) use libp2p::{
     core::{upgrade::DeniedUpgrade, ConnectedPoint, Endpoint, UpgradeInfo},
     swarm::{
         derive_prelude::FromSwarm, handler::ConnectionEvent, ConnectionDenied, ConnectionHandler,
-        ConnectionHandlerEvent, ConnectionId, KeepAlive, NegotiatedSubstream, NetworkBehaviour,
+        ConnectionHandlerEvent, ConnectionId, KeepAlive, Stream, NetworkBehaviour,
         PollParameters, SubstreamProtocol, THandler, THandlerOutEvent, ToSwarm,
     },
     InboundUpgrade, Multiaddr, OutboundUpgrade, PeerId,

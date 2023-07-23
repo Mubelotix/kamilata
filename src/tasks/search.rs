@@ -171,7 +171,7 @@ async fn search_one<const N: usize, S: Store<N>>(
     // Dial the peer, orders the handle to request it, and wait for the response
     let (over_notifier, over_receiver) = oneshot_channel();
     let (routes_sender, mut routes_receiver) = channel(100);
-    behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, HandlerInEvent::SearchRequest { query, routes_sender, result_sender: search_follower, over_notifier }).await;
+    behaviour_controller.dial_peer_and_message(remote_peer_id, addresses, BehaviorToHandlerEvent::SearchRequest { query, routes_sender, result_sender: search_follower, over_notifier }).await;
     
     let Some(routes) = routes_receiver.recv().await else {return None};
     let routes = routes.into_iter().map(|distant_match|

@@ -10,7 +10,7 @@ pub trait SearchResult: Sized + std::fmt::Debug {
     fn from_bytes(bytes: &[u8]) -> Result<Self, Self::ParsingError>;
 }
 
-pub type ResultStream<SearchResult> = Pin<Box<dyn Stream<Item = SearchResult> + Send>>;
+pub type ResultStream<SearchResult> = Pin<Box<dyn futures::Stream<Item = SearchResult> + Send>>;
 pub type ResultStreamBuilderFut<SearchResult> = Pin<Box<dyn Future<Output = ResultStream<SearchResult>> + Send>>;
 
 /// This library lets you manage your documents the way you want.

@@ -3,7 +3,7 @@
 use super::*;
 
 pub(crate) async fn search_req<const N: usize, S: Store<N>>(
-    mut stream: KamOutStreamSink<NegotiatedSubstream>,
+    mut stream: KamOutStreamSink<Stream>,
     query: Arc<S::Query>,
     routes_sender: Sender<Vec<Route>>,
     result_sender: OngoingSearchFollower<N, S>,
@@ -72,7 +72,7 @@ pub(crate) async fn search_req<const N: usize, S: Store<N>>(
 }
 
 pub(crate) fn search_req_boxed<const N: usize, S: Store<N>>(
-    stream: KamOutStreamSink<NegotiatedSubstream>,
+    stream: KamOutStreamSink<Stream>,
     vals: Box<dyn Any + Send>
 ) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(Arc<S::Query>, Sender<Vec<Route>>, OngoingSearchFollower<N, S>, OneshotSender<()>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?

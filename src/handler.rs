@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Events aimed at a [KamilataHandler]
-pub enum HandlerInEvent<const N: usize, S: Store<N>> {
+pub enum BehaviorToHandlerEvent<const N: usize, S: Store<N>> {
     /// Asks the handler to send a request and receive a response.
     Request {
         /// This request packet will be sent through a new outbound substream.
@@ -24,21 +24,21 @@ pub enum HandlerInEvent<const N: usize, S: Store<N>> {
     StopSeeding,
 }
 
-impl<const N: usize, S: Store<N>> std::fmt::Debug for HandlerInEvent<N, S> {
+impl<const N: usize, S: Store<N>> std::fmt::Debug for BehaviorToHandlerEvent<N, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HandlerInEvent::Request { .. } => write!(f, "Request"),
-            HandlerInEvent::SearchRequest { .. } => write!(f, "SearchRequest"),
-            HandlerInEvent::LeechFilters => write!(f, "LeechFilters"),
-            HandlerInEvent::StopLeeching => write!(f, "StopLeeching"),
-            HandlerInEvent::StopSeeding => write!(f, "StopSeeding"),
+            BehaviorToHandlerEvent::Request { .. } => write!(f, "Request"),
+            BehaviorToHandlerEvent::SearchRequest { .. } => write!(f, "SearchRequest"),
+            BehaviorToHandlerEvent::LeechFilters => write!(f, "LeechFilters"),
+            BehaviorToHandlerEvent::StopLeeching => write!(f, "StopLeeching"),
+            BehaviorToHandlerEvent::StopSeeding => write!(f, "StopSeeding"),
         }
     }
 }
 
 /// Events produced by a [KamilataHandler] (unused)
 #[derive(Debug)]
-pub enum HandlerOutEvent {}
+pub enum HandlerToBehaviorEvent {}
 
 /// The [KamilataHandler] is responsible for handling a connection to a remote peer.
 /// Multiple handlers are managed by the [KamilataBehaviour].
@@ -76,8 +76,8 @@ impl<const N: usize, S: Store<N>> KamilataHandler<N, S> {
 }
 
 impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
-    type InEvent = HandlerInEvent<N, S>;
-    type OutEvent = HandlerOutEvent;
+    type FromBehaviour = BehaviorToHandlerEvent<N, S>;
+    type ToBehaviour = HandlerToBehaviorEvent;
     type Error = ioError;
     type InboundProtocol = Either<ArcConfig, DeniedUpgrade>;
     type OutboundProtocol = ArcConfig;
@@ -89,18 +89,18 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
     }
 
     // Events are sent by the Behaviour which we need to obey to.
-    fn on_behaviour_event(&mut self, event: Self::InEvent) {
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
         trace!("{} Received event: {event:?}", self.our_peer_id);
         match event {
-            HandlerInEvent::Request { request, sender } => {
+            BehaviorToHandlerEvent::Request { request, sender } => {
                 let pending_task = pending_request::<N>(request, sender, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((None, pending_task));
             },
-            HandlerInEvent::SearchRequest { query, routes_sender, result_sender, over_notifier  } => {
+            BehaviorToHandlerEvent::SearchRequest { query, routes_sender, result_sender, over_notifier  } => {
                 let pending_task = pending_search_req::<N, S>(query, routes_sender, result_sender, over_notifier, self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((None, pending_task));
             },
-            HandlerInEvent::LeechFilters => {
+            BehaviorToHandlerEvent::LeechFilters => {
                 if self.tasks.contains_key(&2) || self.pending_tasks.iter().any(|(_, pending_task)| pending_task.name == "leech_filters") {
                     trace!("{} Already leeching filters from {}", self.our_peer_id, self.remote_peer_id);
                     return;
@@ -108,7 +108,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                 let pending_task = pending_leech_filters(Arc::clone(&self.db), self.our_peer_id, self.remote_peer_id);
                 self.pending_tasks.push((Some((2, true)), pending_task))
             },
-            HandlerInEvent::StopLeeching => {
+            BehaviorToHandlerEvent::StopLeeching => {
                 self.pending_tasks.retain(|(_, pending_task)| pending_task.name != "leech_filters");
                 if self.tasks.remove(&2).is_some() {
                     let behaviour_controller = self.db.behaviour_controller().clone();
@@ -118,7 +118,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                     });
                 }
             },
-            HandlerInEvent::StopSeeding => {
+            BehaviorToHandlerEvent::StopSeeding => {
                 if self.tasks.remove(&1).is_some() {
                     let behaviour_controller = self.db.behaviour_controller().clone();
                     let remote_peer_id = self.remote_peer_id;
@@ -173,7 +173,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
                 let error = i.error;
                 warn!("{} Failed to establish outbound channel with {}: {error:?}. A {} task has been discarded.", self.our_peer_id, self.remote_peer_id, pending_task.name);
             },
-            ConnectionEvent::ListenUpgradeError(_) | ConnectionEvent::AddressChange(_) => (),
+            ConnectionEvent::ListenUpgradeError(_) | ConnectionEvent::AddressChange(_) | ConnectionEvent::LocalProtocolsChange(_) | ConnectionEvent::RemoteProtocolsChange(_) => (),
         }
     }
 
@@ -184,7 +184,7 @@ impl<const N: usize, S: Store<N>> ConnectionHandler for KamilataHandler<N, S> {
         ConnectionHandlerEvent<
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
-            Self::OutEvent,
+            Self::ToBehaviour,
             Self::Error,
         >,
     > {

@@ -3,7 +3,7 @@
 use super::*;
 
 pub async fn request<const N: usize>(
-    mut stream: KamOutStreamSink<NegotiatedSubstream>,
+    mut stream: KamOutStreamSink<Stream>,
     request: RequestPacket,
     sender: OneshotSender<Option<ResponsePacket>>,
     our_peer_id: PeerId,
@@ -43,7 +43,7 @@ pub async fn request<const N: usize>(
 }
 
 pub fn request_boxed<const N: usize>(
-    stream: KamOutStreamSink<NegotiatedSubstream>,
+    stream: KamOutStreamSink<Stream>,
     vals: Box<dyn Any + Send>
 ) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(RequestPacket, OneshotSender<Option<ResponsePacket>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?

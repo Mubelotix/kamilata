@@ -11,12 +11,12 @@ categories = ["network-programming"]
 keywords = ["p2p", "search-engine", "distributed-systems", "libp2p"]
 
 [dependencies]
-libp2p = {version="0.51", features=["tokio", "noise", "mplex", "kad"]}
-tokio = {version="1.28", features=["macros", "sync", "time"]}
+libp2p = {version="0.52", features=["tokio", "yamux", "noise"]}
+tokio = {version="1.29", features=["macros", "sync", "time"]}
 futures = "0.3"
 protocol = "3.4"
 protocol-derive = "3.4"
-unsigned-varint = "0.7"
+unsigned-varint = {version="0.7", features = ["codec", "futures", "asynchronous_codec"]}
 asynchronous-codec = "0.6"
 log = "0.4"
 either = "1.8"

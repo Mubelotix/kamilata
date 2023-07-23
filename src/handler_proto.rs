@@ -1,7 +1,8 @@
 use crate::prelude::*;
 
 use asynchronous_codec::{Framed, BytesMut};
-use libp2p::kad::protocol::KadStreamSink;
+use std::io;
+pub(crate) type KadStreamSink<S, A, B> = stream::AndThen<sink::With<stream::ErrInto<Framed<S, UviBytes<io::Cursor<Vec<u8>>>>, io::Error>, io::Cursor<Vec<u8>>, A, future::Ready<Result<io::Cursor<Vec<u8>>, io::Error>>, fn(A) -> future::Ready<Result<io::Cursor<Vec<u8>>, io::Error>>>, future::Ready<Result<B, io::Error>>, fn(BytesMut) -> future::Ready<Result<B, io::Error>>>;
 use unsigned_varint::codec::UviBytes;
 
 pub struct ArcConfig {

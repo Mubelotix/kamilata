@@ -2,13 +2,11 @@
 use futures::future;
 use libp2p::{identity::{self, Keypair}, core::transport::MemoryTransport, PeerId, Transport, Swarm, Multiaddr, swarm::{SwarmEvent, SwarmBuilder}};
 
-use tokio::{
-    sync::{
-        mpsc::*,
-        oneshot::{
-            channel as oneshot_channel, Sender as OneshotSender,
-        }
-    },
+use tokio::sync::{
+    mpsc::*,
+    oneshot::{
+        channel as oneshot_channel, Sender as OneshotSender,
+    }
 };
 use futures::StreamExt;
 use log::*;
@@ -20,7 +18,7 @@ pub fn memory_transport(
     Ok(MemoryTransport::default()
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(libp2p::noise::Config::new(&keypair).expect("signing libp2p-noise static keypair"))
-        .multiplex(libp2p::mplex::MplexConfig::default())
+        .multiplex(libp2p::yamux::Config::default())
         .timeout(std::time::Duration::from_secs(20))
         .boxed())
 }

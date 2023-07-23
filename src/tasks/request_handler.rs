@@ -3,7 +3,7 @@
 use super::*;
 
 pub(crate) async fn handle_request<const N: usize, S: Store<N>>(
-    mut stream: KamInStreamSink<NegotiatedSubstream>,
+    mut stream: KamInStreamSink<Stream>,
     db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
     remote_peer_id: PeerId

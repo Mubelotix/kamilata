@@ -41,9 +41,9 @@ pub struct KamilataBehaviour<const N: usize, S: Store<N>> {
     /// Receiver of messages from [BehaviourController]s
     control_msg_receiver: Receiver<BehaviourControlMessage<N, S>>,
     /// When a message is to be sent to a handler that is being dialed, it is temporarily stored here.
-    pending_handler_events: BTreeMap<PeerId, HandlerInEvent<N, S>>,
+    pending_handler_events: BTreeMap<PeerId, BehaviorToHandlerEvent<N, S>>,
     /// When a message is ready to be dispatched to a handler, it is moved here.
-    handler_event_queue: Vec<(PeerId, HandlerInEvent<N, S>)>,
+    handler_event_queue: Vec<(PeerId, BehaviorToHandlerEvent<N, S>)>,
 
     task_counter: Counter,
     /// Tasks associated with task identifiers.  
@@ -134,15 +134,15 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
     /// Starts leeching from a peer.
     /// If we already leech from this peer, this function does nothing.
     pub fn leech_from(&mut self, seeder: PeerId) {
-        self.handler_event_queue.push((seeder, HandlerInEvent::LeechFilters));
+        self.handler_event_queue.push((seeder, BehaviorToHandlerEvent::LeechFilters));
     }
 
     pub fn stop_leeching(&mut self, seeder: PeerId) {
-        self.handler_event_queue.push((seeder, HandlerInEvent::StopLeeching));
+        self.handler_event_queue.push((seeder, BehaviorToHandlerEvent::StopLeeching));
     }
 
     pub fn stop_seeding(&mut self, seeder: PeerId) {
-        self.handler_event_queue.push((seeder, HandlerInEvent::StopSeeding));
+        self.handler_event_queue.push((seeder, BehaviorToHandlerEvent::StopSeeding));
     }
 
     /// Starts a new search and returns an [handler](OngoingSearchControler) to control it.
@@ -182,7 +182,7 @@ impl<const N: usize, S: Store<N>> KamilataBehaviour<N, S> {
 
 impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
     type ConnectionHandler = KamilataHandler<N, S>;
-    type OutEvent = KamilataEvent;
+    type ToSwarm = KamilataEvent;
 
     fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
         match event {
@@ -259,7 +259,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
-    ) -> Poll<ToSwarm<Self::OutEvent, libp2p::swarm::THandlerInEvent<Self>>> {
+    ) -> Poll<ToSwarm<Self::ToSwarm, libp2p::swarm::THandlerInEvent<Self>>> {
         // Message handlers first
         if let Some((peer_id, event)) = self.handler_event_queue.pop() {
             return Poll::Ready(
@@ -327,7 +327,7 @@ impl<const N: usize, S: Store<N>> NetworkBehaviour for KamilataBehaviour<N, S> {
 /// Internal control messages send by [BehaviourController] to [KamilataBehaviour]
 #[derive(Debug)]
 pub(crate) enum BehaviourControlMessage<const N: usize, S: Store<N>> {
-    DialPeerAndMessage(PeerId, Vec<Multiaddr>, HandlerInEvent<N, S>),
+    DialPeerAndMessage(PeerId, Vec<Multiaddr>, BehaviorToHandlerEvent<N, S>),
     OutputEvent(KamilataEvent),
 }
 
@@ -344,7 +344,7 @@ impl<const N: usize, S: Store<N>> Clone for BehaviourController<N, S> {
 
 impl<const N: usize, S: Store<N>> BehaviourController<N, S> {
     /// Requests behaviour to dial a peer and send a message to it.
-    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: HandlerInEvent<N, S>) {
+    pub async fn dial_peer_and_message(&self, peer_id: PeerId, addresses: Vec<Multiaddr>, message: BehaviorToHandlerEvent<N, S>) {
         if let Err(e) = self.sender.send(BehaviourControlMessage::DialPeerAndMessage(peer_id, addresses, message)).await {
             error!("Failed to dial peer and message {e}");
         }

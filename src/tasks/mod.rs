@@ -22,7 +22,7 @@ pub struct HandlerTask {
 pub struct PendingHandlerTask<T> {
     pub params: T,
     #[allow(clippy::type_complexity)]
-    pub fut: fn(KamOutStreamSink<NegotiatedSubstream>, T) -> BoxFuture<'static, HandlerTaskOutput>,
+    pub fut: fn(KamOutStreamSink<Stream>, T) -> BoxFuture<'static, HandlerTaskOutput>,
     pub name: &'static str,
 }
 

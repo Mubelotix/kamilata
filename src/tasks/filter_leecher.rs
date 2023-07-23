@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOutStreamSink<NegotiatedSubstream>, db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
+pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOutStreamSink<Stream>, db: Arc<Db<N, S>>, our_peer_id: PeerId, remote_peer_id: PeerId) -> HandlerTaskOutput {
     trace!("{our_peer_id} Inbound filter refresh task executing");
 
     // Claims a spot as a seeder for the remote peer
@@ -59,7 +59,7 @@ pub(crate) async fn leech_filters<const N: usize, S: Store<N>>(mut stream: KamOu
     }
 }
 
-pub(crate) fn leech_filters_boxed<const N: usize, S: Store<N>>(stream: KamOutStreamSink<NegotiatedSubstream>, vals: Box<dyn Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
+pub(crate) fn leech_filters_boxed<const N: usize, S: Store<N>>(stream: KamOutStreamSink<Stream>, vals: Box<dyn Any + Send>) -> Pin<Box<dyn Future<Output = HandlerTaskOutput> + Send>> {
     let vals: Box<(Arc<Db<N, S>>, PeerId, PeerId)> = vals.downcast().unwrap(); // TODO: downcast unchecked?
     leech_filters(stream, vals.0, vals.1, vals.2).boxed()
 }

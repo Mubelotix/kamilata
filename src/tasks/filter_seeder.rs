@@ -5,7 +5,7 @@ use super::*;
 // TODO: When rejecting a peer, we should send a message to the peer explaining why we rejected it
 
 pub(crate) async fn seed_filters<const N: usize, S: Store<N>>(
-    mut stream: KamInStreamSink<NegotiatedSubstream>,
+    mut stream: KamInStreamSink<Stream>,
     mut req: GetFiltersPacket,
     db: Arc<Db<N, S>>,
     our_peer_id: PeerId,
