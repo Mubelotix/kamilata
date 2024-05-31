@@ -1,3 +1,11 @@
+<h1 align="center"><a href="https://github.com/Mubelotix/admarus/tree/master/kamilata">THIS PROJECT HAS MOVED</a></h1>
+
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
 <h1 align="center">Kamilata</h1>
 
 <p align="center">
